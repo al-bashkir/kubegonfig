@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 Pavel Aksenov <41126916+al-bashkir@users.noreply.github.com>
+
 // Package storage provides XDG-compliant directory management,
 // atomic file writes, and file locking for kubegonfig.
 package storage

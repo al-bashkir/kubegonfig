@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 Pavel Aksenov <41126916+al-bashkir@users.noreply.github.com>
+
 // Package crypto provides GPG encryption and decryption via the external
 // gpg binary. It uses the user's existing GPG keyring and agent.
 package crypto
