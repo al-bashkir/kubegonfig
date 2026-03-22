@@ -98,6 +98,64 @@ func Decrypt(data []byte) ([]byte, error) {
 	return stdout.Bytes(), nil
 }
 
+// GPGKey represents a secret key from the user's GPG keyring.
+type GPGKey struct {
+	KeyID       string   // Long key ID (16 hex chars)
+	Fingerprint string   // Full fingerprint
+	UIDs        []string // User ID strings (e.g. "Name <email>")
+}
+
+// ListSecretKeys returns all secret keys available in the GPG keyring.
+func ListSecretKeys() ([]GPGKey, error) {
+	bin, err := gpgPath()
+	if err != nil {
+		return nil, err
+	}
+
+	var stdout, stderr bytes.Buffer
+	cmd := exec.Command(bin,
+		"--list-secret-keys",
+		"--with-colons",
+		"--keyid-format", "long",
+	)
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		errMsg := sanitizeGPGError(stderr.String())
+		return nil, fmt.Errorf("gpg list-secret-keys: %s: %w", errMsg, err)
+	}
+
+	var keys []GPGKey
+	var current *GPGKey
+
+	for _, line := range strings.Split(stdout.String(), "\n") {
+		fields := strings.Split(line, ":")
+		if len(fields) < 10 {
+			continue
+		}
+
+		switch fields[0] {
+		case "sec":
+			keys = append(keys, GPGKey{KeyID: fields[4]})
+			current = &keys[len(keys)-1]
+		case "fpr":
+			if current != nil && current.Fingerprint == "" {
+				current.Fingerprint = fields[9]
+			}
+		case "uid":
+			if current != nil {
+				uid := fields[9]
+				if uid != "" {
+					current.UIDs = append(current.UIDs, uid)
+				}
+			}
+		}
+	}
+
+	return keys, nil
+}
+
 // sanitizeGPGError removes lines that could leak sensitive info from gpg stderr.
 func sanitizeGPGError(stderr string) string {
 	var safe []string

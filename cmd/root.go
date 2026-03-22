@@ -87,6 +87,11 @@ func init() {
 	)
 }
 
+// SetVersion sets the version string shown by --version.
+func SetVersion(v string) {
+	rootCmd.Version = v
+}
+
 // Execute is the main entry point for the CLI.
 func Execute() {
 	tmpfile.SetupSignalHandler()
