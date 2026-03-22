@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 Pavel Aksenov <41126916+al-bashkir@users.noreply.github.com>
+
 // Package kubeconfig provides validation of kubeconfig YAML content.
 // It checks structural correctness without interpreting or logging secrets.
 package kubeconfig

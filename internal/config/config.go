@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 Pavel Aksenov <41126916+al-bashkir@users.noreply.github.com>
+
 // Package config manages the kubegonfig application configuration.
 // Config is stored at XDG_CONFIG_HOME/kubegonfig/config.yaml.
 package config

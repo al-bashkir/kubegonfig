@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 Pavel Aksenov <41126916+al-bashkir@users.noreply.github.com>
+
 // Package tmpfile manages the lifecycle of temporary decrypted kubeconfig
 // files. Files are created in a secure runtime directory with restricted
 // permissions and cleaned up on exit or signal.
