@@ -1,0 +1,29 @@
+package cmd
+
+import (
+	"kubegonfig/internal/tmpfile"
+
+	"github.com/spf13/cobra"
+)
+
+var cleanupCmd = &cobra.Command{
+	Use:   "cleanup",
+	Short: "Remove stale temporary kubeconfig files",
+	Long: `Remove all decrypted kubeconfig files from the runtime directory.
+Run this periodically or when you want to ensure no plaintext
+kubeconfigs remain on disk.`,
+	Args: cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		count, err := tmpfile.CleanupStale()
+		if err != nil {
+			return err
+		}
+
+		if count == 0 {
+			info("No temporary files to clean up")
+		} else {
+			info("Removed %d temporary file(s)", count)
+		}
+		return nil
+	},
+}
