@@ -1,0 +1,27 @@
+# Assistant instructions and platform config should not become graph knowledge.
+AGENTS.md
+CLAUDE.md
+GEMINI.md
+.github/copilot-instructions.md
+.agent/
+.agents/
+.codex/
+.cursor/
+.gemini/
+.kiro/
+.opencode/
+
+# Generated graphify output and local scratch files.
+graphify-out/
+.graphify_python
+.graphify_*.json
+
+# Local build and editor artifacts.
+kubegonfig
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db

@@ -1,0 +1,27 @@
+# Compiled binary
+kubegonfig
+
+# Agent working directory — local development process artifacts only.
+# These files track task progress and architectural decisions during
+# development and must NOT appear in version control.
+.agent/
+.plan/
+
+# graphify local/heavy artifacts. Keep graphify-out/ itself commit-friendly,
+# but skip machine-local cache, mtime manifest, and token cost tracking.
+graphify-out/cache/
+graphify-out/manifest.json
+graphify-out/cost.json
+.graphify_python
+.graphify_*.json
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db

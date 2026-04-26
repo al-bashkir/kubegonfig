@@ -1,0 +1,94 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - run: go vet ./...
+
+      - run: go test ./... -count=1
+
+      - run: go test -race ./... -count=1
+
+      - name: Install shell syntax dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zsh fish
+
+      - name: Check shell wrapper syntax
+        run: |
+          bash -n shell/kubegonfig.bash
+          zsh -n shell/kubegonfig.zsh
+          fish -n shell/kubegonfig.fish
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build
+        env:
+          CGO_ENABLED: "0"
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          binary="kubegonfig-${{ matrix.goos }}-${{ matrix.goarch }}"
+          go build -trimpath -ldflags="-s -w -X main.version=${{ github.ref_name }}" -o "${binary}" .
+          sha256sum "${binary}" > "${binary}.sha256"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kubegonfig-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: |
+            kubegonfig-${{ matrix.goos }}-${{ matrix.goarch }}
+            kubegonfig-${{ matrix.goos }}-${{ matrix.goarch }}.sha256
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --title "${{ github.ref_name }}" \
+            --generate-notes \
+            artifacts/*
