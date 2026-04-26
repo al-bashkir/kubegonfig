@@ -4,6 +4,7 @@
 package tmpfile
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -12,6 +13,7 @@ import (
 func TestCreateAndCleanup(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("XDG_RUNTIME_DIR", tmp)
+	resetTracked(t)
 
 	data := []byte("apiVersion: v1\nkind: Config\n")
 
@@ -52,6 +54,57 @@ func TestCreateAndCleanup(t *testing.T) {
 	}
 }
 
+func TestCreate_InvalidName(t *testing.T) {
+	_, err := Create("../bad", []byte("data"))
+	if err == nil {
+		t.Fatal("Create with invalid profile name should fail")
+	}
+}
+
+func TestOpenUnlinked(t *testing.T) {
+	tmp := t.TempDir()
+	runtimeDir := filepath.Join(tmp, "kubegonfig")
+	t.Setenv("XDG_RUNTIME_DIR", tmp)
+	resetTracked(t)
+
+	data := []byte("apiVersion: v1\nkind: Config\n")
+	f, err := OpenUnlinked("exec-profile", data)
+	if err != nil {
+		t.Fatalf("OpenUnlinked() error: %v", err)
+	}
+	defer f.Close()
+
+	got, err := io.ReadAll(f)
+	if err != nil {
+		t.Fatalf("ReadAll(open file) error: %v", err)
+	}
+	if string(got) != string(data) {
+		t.Errorf("file content = %q, want %q", got, data)
+	}
+
+	entries, err := os.ReadDir(runtimeDir)
+	if err != nil {
+		t.Fatalf("ReadDir(%q) error: %v", runtimeDir, err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("runtime dir contains %d entries, want 0", len(entries))
+	}
+
+	trackedMu.Lock()
+	count := len(tracked)
+	trackedMu.Unlock()
+	if count != 0 {
+		t.Errorf("tracked count = %d, want 0", count)
+	}
+}
+
+func TestOpenUnlinked_InvalidName(t *testing.T) {
+	_, err := OpenUnlinked("../bad", []byte("data"))
+	if err == nil {
+		t.Fatal("OpenUnlinked with invalid profile name should fail")
+	}
+}
+
 func TestRemove(t *testing.T) {
 	tmp := t.TempDir()
 	path := filepath.Join(tmp, "remove-me.yaml")
@@ -69,6 +122,27 @@ func TestRemove(t *testing.T) {
 	}
 }
 
+func TestRemove_UntracksPath(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("XDG_RUNTIME_DIR", tmp)
+	resetTracked(t)
+
+	path, err := Create("remove-me", []byte("data"))
+	if err != nil {
+		t.Fatalf("Create() error: %v", err)
+	}
+	if err := Remove(path); err != nil {
+		t.Fatalf("Remove() error: %v", err)
+	}
+
+	trackedMu.Lock()
+	count := len(tracked)
+	trackedMu.Unlock()
+	if count != 0 {
+		t.Errorf("tracked count after Remove = %d, want 0", count)
+	}
+}
+
 func TestCleanupStale(t *testing.T) {
 	tmp := t.TempDir()
 	runtimeDir := filepath.Join(tmp, "kubegonfig")
@@ -78,8 +152,8 @@ func TestCleanupStale(t *testing.T) {
 		t.Fatalf("setup: %v", err)
 	}
 
-	// Create some stale files.
-	for _, name := range []string{"old1.yaml", "old2.yaml", "old3.yaml"} {
+	// Create stale kubeconfig files and unrelated files that must be preserved.
+	for _, name := range []string{"old1.yaml", "old2.yaml", "old3.yaml", "notes.txt", "-bad.yaml"} {
 		path := filepath.Join(runtimeDir, name)
 		if err := os.WriteFile(path, []byte("stale"), 0600); err != nil {
 			t.Fatalf("setup: %v", err)
@@ -94,13 +168,15 @@ func TestCleanupStale(t *testing.T) {
 		t.Errorf("CleanupStale() removed %d, want 3", count)
 	}
 
-	// Verify all files are gone.
-	entries, err := os.ReadDir(runtimeDir)
-	if err != nil {
-		t.Fatalf("readdir: %v", err)
+	for _, name := range []string{"old1.yaml", "old2.yaml", "old3.yaml"} {
+		if _, err := os.Stat(filepath.Join(runtimeDir, name)); !os.IsNotExist(err) {
+			t.Errorf("%s should have been removed", name)
+		}
 	}
-	if len(entries) != 0 {
-		t.Errorf("directory should be empty, has %d entries", len(entries))
+	for _, name := range []string{"notes.txt", "-bad.yaml"} {
+		if _, err := os.Stat(filepath.Join(runtimeDir, name)); err != nil {
+			t.Errorf("%s should have been preserved: %v", name, err)
+		}
 	}
 }
 
@@ -180,4 +256,11 @@ func TestCreate_MultipleTracked(t *testing.T) {
 	if count != 0 {
 		t.Errorf("tracked count after cleanup = %d, want 0", count)
 	}
+}
+
+func resetTracked(t *testing.T) {
+	t.Helper()
+	trackedMu.Lock()
+	tracked = nil
+	trackedMu.Unlock()
 }

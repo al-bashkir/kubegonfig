@@ -11,6 +11,11 @@ import (
 	"strings"
 )
 
+const (
+	StylePosix = "posix"
+	StyleFish  = "fish"
+)
+
 // validNameRe matches safe profile names: starts with alnum, then alnum/dot/dash/underscore.
 // Max length 64 to prevent filesystem issues.
 var validNameRe = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$`)
@@ -47,18 +52,35 @@ func FormatExport(key, value string) string {
 	return fmt.Sprintf("export %s=%s", key, EscapePosix(value))
 }
 
-// FormatUnset returns a POSIX-compatible unset statement.
-func FormatUnset(key string) string {
-	return fmt.Sprintf("unset %s", key)
-}
-
 // FormatFishSet returns a fish shell set statement.
 // Output: set -gx KEY 'value'
 func FormatFishSet(key, value string) string {
 	return fmt.Sprintf("set -gx %s %s", key, EscapePosix(value))
 }
 
-// FormatFishErase returns a fish shell erase statement.
-func FormatFishErase(key string) string {
-	return fmt.Sprintf("set -e %s", key)
+// NormalizeStyle validates a shell output style and applies the default.
+func NormalizeStyle(style string) (string, error) {
+	if style == "" {
+		return StylePosix, nil
+	}
+	switch style {
+	case StylePosix, StyleFish:
+		return style, nil
+	default:
+		return "", fmt.Errorf("unsupported shell style %q (expected %q or %q)", style, StylePosix, StyleFish)
+	}
+}
+
+// FormatSet returns a shell command that exports key=value for the given style.
+func FormatSet(style, key, value string) (string, error) {
+	style, err := NormalizeStyle(style)
+	if err != nil {
+		return "", err
+	}
+	switch style {
+	case StyleFish:
+		return FormatFishSet(key, value), nil
+	default:
+		return FormatExport(key, value), nil
+	}
 }

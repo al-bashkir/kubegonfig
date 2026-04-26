@@ -86,14 +86,6 @@ func TestFormatExport(t *testing.T) {
 	}
 }
 
-func TestFormatUnset(t *testing.T) {
-	got := FormatUnset("KUBECONFIG")
-	want := "unset KUBECONFIG"
-	if got != want {
-		t.Errorf("FormatUnset = %q, want %q", got, want)
-	}
-}
-
 func TestFormatFishSet(t *testing.T) {
 	got := FormatFishSet("KUBECONFIG", "/tmp/config")
 	want := "set -gx KUBECONFIG '/tmp/config'"
@@ -102,10 +94,54 @@ func TestFormatFishSet(t *testing.T) {
 	}
 }
 
-func TestFormatFishErase(t *testing.T) {
-	got := FormatFishErase("KUBECONFIG")
-	want := "set -e KUBECONFIG"
-	if got != want {
-		t.Errorf("FormatFishErase = %q, want %q", got, want)
+func TestNormalizeStyle(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		want    string
+		wantErr bool
+	}{
+		{"default", "", StylePosix, false},
+		{"posix", StylePosix, StylePosix, false},
+		{"fish", StyleFish, StyleFish, false},
+		{"invalid", "powershell", "", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := NormalizeStyle(tt.input)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("NormalizeStyle(%q) error = %v, wantErr %v", tt.input, err, tt.wantErr)
+			}
+			if got != tt.want {
+				t.Errorf("NormalizeStyle(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestFormatSet(t *testing.T) {
+	tests := []struct {
+		name    string
+		style   string
+		want    string
+		wantErr bool
+	}{
+		{"default", "", "export KUBECONFIG='/tmp/config'", false},
+		{"posix", StylePosix, "export KUBECONFIG='/tmp/config'", false},
+		{"fish", StyleFish, "set -gx KUBECONFIG '/tmp/config'", false},
+		{"invalid", "cmd", "", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := FormatSet(tt.style, "KUBECONFIG", "/tmp/config")
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("FormatSet(%q) error = %v, wantErr %v", tt.style, err, tt.wantErr)
+			}
+			if got != tt.want {
+				t.Errorf("FormatSet(%q) = %q, want %q", tt.style, got, tt.want)
+			}
+		})
 	}
 }

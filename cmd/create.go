@@ -5,7 +5,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 
 	"kubegonfig/internal/editor"
 
@@ -59,6 +58,4 @@ current-context: ""
 
 func init() {
 	createCmd.Flags().StringVar(&createFrom, "from", "", "import kubeconfig from file path")
-	// Allow stdin detection for future pipe support.
-	_ = os.Stdin
 }
