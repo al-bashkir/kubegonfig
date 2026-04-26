@@ -120,6 +120,16 @@ func testWrapperAddsDefaultPosixShellStyle(t *testing.T, shellName, wrapperFile 
 			wantArgs: "env prod --shell posix\n",
 		},
 		{
+			name:     "env with global quiet before subcommand",
+			args:     []string{"--quiet", "env", "prod"},
+			wantArgs: "--quiet env prod --shell posix\n",
+		},
+		{
+			name:     "use with short global quiet before subcommand",
+			args:     []string{"-q", "use", "prod"},
+			wantArgs: "-q use prod --shell posix\n",
+		},
+		{
 			name:     "use explicit shell flag",
 			args:     []string{"use", "prod", "--shell", "fish"},
 			wantArgs: "use prod --shell fish\n",
@@ -241,6 +251,16 @@ func testFishWrapperAddsDefaultFishShellStyle(t *testing.T) {
 			name:     "env default shell",
 			args:     []string{"env", "prod"},
 			wantArgs: "env prod --shell fish\n",
+		},
+		{
+			name:     "env with global quiet before subcommand",
+			args:     []string{"--quiet", "env", "prod"},
+			wantArgs: "--quiet env prod --shell fish\n",
+		},
+		{
+			name:     "use with short global quiet before subcommand",
+			args:     []string{"-q", "use", "prod"},
+			wantArgs: "-q use prod --shell fish\n",
 		},
 		{
 			name:     "use explicit shell flag",

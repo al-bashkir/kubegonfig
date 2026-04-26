@@ -6,10 +6,14 @@
 package config
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
+	"kubegonfig/internal/shell"
 	"kubegonfig/internal/storage"
 
 	"gopkg.in/yaml.v3"
@@ -40,21 +44,29 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("resolve config dir: %w", err)
 	}
 
-	path := dir + "/config.yaml"
+	path := filepath.Join(dir, "config.yaml")
 	cfg := &Config{path: path}
 
-	data, err := os.ReadFile(path)
+	data, err := storage.ReadFileInDir(dir, "config.yaml")
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return cfg, nil
 		}
 		return nil, fmt.Errorf("read config: %w", err)
 	}
 
-	if err := yaml.Unmarshal(data, cfg); err != nil {
+	decoder := yaml.NewDecoder(bytes.NewReader(data))
+	decoder.KnownFields(true)
+	if err := decoder.Decode(cfg); err != nil {
 		return nil, fmt.Errorf("parse config %s: %w", path, err)
 	}
 	cfg.path = path
+	if _, err := shell.NormalizeStyle(cfg.ShellStyle); err != nil {
+		return nil, fmt.Errorf("validate config %s: %w", path, err)
+	}
+	if _, err := normalizeDataDir(cfg.DataDir); err != nil {
+		return nil, fmt.Errorf("validate config %s: %w", path, err)
+	}
 	return cfg, nil
 }
 
@@ -98,8 +110,12 @@ func (c *Config) Recipients() []string {
 
 // ResolveDataDir returns the effective data directory.
 func (c *Config) ResolveDataDir() (string, error) {
-	if c.DataDir != "" {
-		return c.DataDir, nil
+	dataDir, err := normalizeDataDir(c.DataDir)
+	if err != nil {
+		return "", err
+	}
+	if dataDir != "" {
+		return dataDir, nil
 	}
 	return storage.DataDir()
 }
@@ -114,8 +130,28 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("gpg_recipients must not contain blank recipients")
 		}
 	}
+	if _, err := shell.NormalizeStyle(c.ShellStyle); err != nil {
+		return err
+	}
+	if _, err := normalizeDataDir(c.DataDir); err != nil {
+		return err
+	}
 	if len(c.Recipients()) == 0 {
 		return fmt.Errorf("no GPG recipient configured; run: kubegonfig init")
 	}
 	return nil
+}
+
+func normalizeDataDir(dataDir string) (string, error) {
+	if dataDir == "" {
+		return "", nil
+	}
+	dataDir = strings.TrimSpace(dataDir)
+	if dataDir == "" {
+		return "", fmt.Errorf("data_dir must not be blank")
+	}
+	if !filepath.IsAbs(dataDir) {
+		return "", fmt.Errorf("data_dir must be an absolute path")
+	}
+	return dataDir, nil
 }

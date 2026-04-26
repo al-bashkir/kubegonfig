@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -54,7 +55,7 @@ func Edit(initialContent []byte) ([]byte, error) {
 		return nil, fmt.Errorf("chmod temp dir: %w", err)
 	}
 
-	tmpFile := tmpDir + "/kubeconfig.yaml"
+	tmpFile := filepath.Join(tmpDir, "kubeconfig.yaml")
 	if err := os.WriteFile(tmpFile, initialContent, 0600); err != nil {
 		return nil, fmt.Errorf("write temp file: %w", err)
 	}

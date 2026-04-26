@@ -6,7 +6,17 @@
 # are eval'd in the current shell, allowing KUBECONFIG export to take effect.
 
 function kubegonfig --wraps=kubegonfig
-    set -l cmd $argv[1]
+    set -l cmd
+    for arg in $argv
+        switch "$arg"
+            case -q --quiet
+            case --
+                break
+            case '*'
+                set cmd $arg
+                break
+        end
+    end
 
     switch "$cmd"
         case use env

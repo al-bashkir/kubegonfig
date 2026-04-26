@@ -6,11 +6,24 @@
 # are eval'd in the current shell, allowing KUBECONFIG export to take effect.
 
 kubegonfig() {
-    local cmd="${1:-}"
+    local cmd=""
+    local arg
+    for arg in "$@"; do
+        case "$arg" in
+            -q|--quiet)
+                ;;
+            --)
+                break
+                ;;
+            *)
+                cmd="$arg"
+                break
+                ;;
+        esac
+    done
 
     case "$cmd" in
         use|env)
-            local arg
             local has_shell=0
             for arg in "$@"; do
                 case "$arg" in

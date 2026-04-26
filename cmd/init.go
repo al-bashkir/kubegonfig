@@ -35,8 +35,11 @@ and lets you select one interactively.`,
 			return err
 		}
 
-		recipient := initRecipient
-		if recipient == "" {
+		recipient, hasRecipient, err := initRecipientFromFlag(initRecipient, cmd.Flags().Changed("recipient"))
+		if err != nil {
+			return err
+		}
+		if !hasRecipient {
 			selected, err := selectGPGKey()
 			if err != nil {
 				return err
@@ -52,6 +55,17 @@ and lets you select one interactively.`,
 		info("Configuration saved to %s", c.Path())
 		return nil
 	},
+}
+
+func initRecipientFromFlag(value string, changed bool) (recipient string, ok bool, err error) {
+	if !changed {
+		return "", false, nil
+	}
+	recipient = strings.TrimSpace(value)
+	if recipient == "" {
+		return "", false, fmt.Errorf("GPG recipient must not be blank")
+	}
+	return recipient, true, nil
 }
 
 // selectGPGKey lists available GPG secret keys and prompts the user to pick one.

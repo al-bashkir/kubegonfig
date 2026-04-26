@@ -22,12 +22,14 @@ and store it as a named profile.`,
 			return err
 		}
 
-		info("Profile %q imported from %s", name, importFrom)
+		info("Profile %q imported", name)
 		return nil
 	},
 }
 
 func init() {
 	importCmd.Flags().StringVar(&importFrom, "from", "", "path to kubeconfig file (required)")
-	_ = importCmd.MarkFlagRequired("from")
+	if err := importCmd.MarkFlagRequired("from"); err != nil {
+		panic(err)
+	}
 }

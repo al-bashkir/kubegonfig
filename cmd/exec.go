@@ -22,11 +22,11 @@ var execCmd = &cobra.Command{
 	Use:   "exec <name> -- <command> [args...]",
 	Short: "Run a command with KUBECONFIG set to the named profile",
 	Long: `Decrypt the profile, set KUBECONFIG in a child process environment,
-run the specified command, and clean up the temporary file afterward.
+and run the specified command.
 
 This is the most secure activation method: the decrypted kubeconfig
-exists only for the duration of the child command and is removed
-immediately after.
+is unlinked before the child command continues and is passed through
+an inherited file descriptor.
 
 Example:
   kubegonfig exec prod -- kubectl get pods
@@ -65,13 +65,22 @@ Example:
 }
 
 func runExecProfile(name string, cmdArgs []string) (int, error) {
-	data, err := mgr.Decrypt(name)
-	if err != nil {
-		return 0, err
-	}
+	var kubeconfig *os.File
+	if err := mgr.WithLock(func() error {
+		data, err := mgr.Decrypt(name)
+		if err != nil {
+			return err
+		}
 
-	kubeconfig, err := tmpfile.OpenUnlinked(name, data)
-	if err != nil {
+		kubeconfig, err = tmpfile.OpenUnlinked(name, data)
+		if err != nil {
+			return err
+		}
+		return nil
+	}); err != nil {
+		if kubeconfig != nil {
+			_ = kubeconfig.Close()
+		}
 		return 0, err
 	}
 

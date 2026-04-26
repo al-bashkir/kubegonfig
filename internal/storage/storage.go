@@ -13,8 +13,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"runtime"
-	"syscall"
 
 	"golang.org/x/sys/unix"
 )
@@ -107,7 +105,7 @@ func EnsureDir(path string, perm os.FileMode) error {
 }
 
 func openDirNoFollow(path string) (*os.File, error) {
-	fd, err := syscall.Open(path, syscall.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_DIRECTORY|syscall.O_CLOEXEC, 0)
+	fd, err := unix.Open(path, unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
 	if err != nil {
 		return nil, fmt.Errorf("open directory %s: %w", path, err)
 	}
@@ -122,11 +120,9 @@ func validateOpenDir(path string, dir *os.File) error {
 	if !info.IsDir() {
 		return fmt.Errorf("%s is not a directory", path)
 	}
-	if runtime.GOOS != "windows" {
-		stat, ok := info.Sys().(*syscall.Stat_t)
-		if ok && stat.Uid != uint32(os.Getuid()) {
-			return fmt.Errorf("directory %s is not owned by current user", path)
-		}
+	stat, ok := info.Sys().(*unix.Stat_t)
+	if ok && stat.Uid != uint32(os.Getuid()) {
+		return fmt.Errorf("directory %s is not owned by current user", path)
 	}
 	return nil
 }
@@ -135,16 +131,6 @@ func validateOpenDir(path string, dir *os.File) error {
 // strategy. This prevents partial writes from corrupting existing files.
 func AtomicWrite(path string, data []byte, perm os.FileMode) error {
 	return AtomicWriteInDir(filepath.Dir(path), filepath.Base(path), data, perm)
-}
-
-// RemoveFile removes a file if it exists. Does not error if the file
-// is already absent.
-func RemoveFile(path string) error {
-	err := os.Remove(path)
-	if err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("remove %s: %w", path, err)
-	}
-	return nil
 }
 
 // RemoveFileInDir removes a file relative to a verified non-symlink directory.
@@ -472,11 +458,38 @@ func NewFileLock(path string) (*FileLock, error) {
 
 // Lock acquires an exclusive advisory lock. Blocks until acquired.
 func (l *FileLock) Lock() error {
-	f, err := os.OpenFile(l.path, os.O_CREATE|os.O_RDWR, 0600)
+	dirPath := filepath.Dir(l.path)
+	name := filepath.Base(l.path)
+	if err := validateRelativeFileName(name); err != nil {
+		return err
+	}
+	dir, err := openVerifiedDir(dirPath)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = dir.Close()
+	}()
+
+	fd, err := unix.Openat(int(dir.Fd()), name, unix.O_CREAT|unix.O_RDWR|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0600)
 	if err != nil {
 		return fmt.Errorf("open lock file %s: %w", l.path, err)
 	}
-	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
+	f := os.NewFile(uintptr(fd), l.path)
+	info, err := f.Stat()
+	if err != nil {
+		_ = f.Close()
+		return fmt.Errorf("stat lock file %s: %w", l.path, err)
+	}
+	if !info.Mode().IsRegular() {
+		_ = f.Close()
+		return fmt.Errorf("lock file %s is not a regular file", l.path)
+	}
+	if err := f.Chmod(0600); err != nil {
+		_ = f.Close()
+		return fmt.Errorf("chmod lock file %s: %w", l.path, err)
+	}
+	if err := unix.Flock(int(f.Fd()), unix.LOCK_EX); err != nil {
 		_ = f.Close()
 		return fmt.Errorf("flock %s: %w", l.path, err)
 	}
@@ -491,7 +504,7 @@ func (l *FileLock) Unlock() error {
 	}
 	f := l.f
 	l.f = nil
-	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_UN); err != nil {
+	if err := unix.Flock(int(f.Fd()), unix.LOCK_UN); err != nil {
 		_ = f.Close()
 		return fmt.Errorf("funlock %s: %w", l.path, err)
 	}

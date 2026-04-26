@@ -22,18 +22,10 @@ func activateProfile(name, shellFlag string) (string, error) {
 		return "", err
 	}
 
-	data, err := mgr.Decrypt(name)
+	path, err := mgr.Activate(name, func(data []byte) (string, error) {
+		return tmpfile.Create(name, data)
+	}, tmpfile.Remove)
 	if err != nil {
-		return "", err
-	}
-
-	path, err := tmpfile.Create(name, data)
-	if err != nil {
-		return "", err
-	}
-
-	if err := mgr.SetCurrent(name); err != nil {
-		_ = tmpfile.Remove(path)
 		return "", err
 	}
 

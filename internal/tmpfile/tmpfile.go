@@ -76,7 +76,11 @@ func OpenUnlinked(name string, data []byte) (*os.File, error) {
 
 // Remove deletes a specific temp file.
 func Remove(path string) error {
-	if err := storage.RemoveFile(path); err != nil {
+	dir, name, err := runtimeTempPathParts(path)
+	if err != nil {
+		return err
+	}
+	if err := storage.RemoveFileInDir(dir, name); err != nil {
 		return err
 	}
 	untrack(path)
@@ -88,11 +92,10 @@ func CleanupAll() {
 	trackedMu.Lock()
 	paths := make([]string, len(tracked))
 	copy(paths, tracked)
-	tracked = nil
 	trackedMu.Unlock()
 
 	for _, p := range paths {
-		_ = os.Remove(p)
+		_ = Remove(p)
 	}
 }
 
@@ -132,6 +135,26 @@ func CleanupStale() (int, error) {
 func isKubeconfigTempName(name string) bool {
 	profileName, ok := strings.CutSuffix(name, ".yaml")
 	return ok && shell.ValidateName(profileName) == nil
+}
+
+func runtimeTempPathParts(path string) (string, string, error) {
+	dir, err := storage.RuntimeDir()
+	if err != nil {
+		return "", "", fmt.Errorf("resolve runtime dir: %w", err)
+	}
+	absDir, err := filepath.Abs(dir)
+	if err != nil {
+		return "", "", fmt.Errorf("resolve runtime dir path: %w", err)
+	}
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return "", "", fmt.Errorf("resolve temp file path: %w", err)
+	}
+	name := filepath.Base(absPath)
+	if filepath.Dir(absPath) != absDir || !isKubeconfigTempName(name) {
+		return "", "", fmt.Errorf("refusing to remove non-kubegonfig runtime temp file %q", path)
+	}
+	return dir, name, nil
 }
 
 func untrack(path string) {

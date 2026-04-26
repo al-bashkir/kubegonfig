@@ -14,11 +14,12 @@ import (
 // kubeConfig is a minimal representation of a kubeconfig file.
 // Only structural fields are checked; secret values are never inspected.
 type kubeConfig struct {
-	APIVersion string         `yaml:"apiVersion"`
-	Kind       string         `yaml:"kind"`
-	Clusters   []clusterEntry `yaml:"clusters"`
-	Contexts   []contextEntry `yaml:"contexts"`
-	Users      []userEntry    `yaml:"users"`
+	APIVersion     string         `yaml:"apiVersion"`
+	Kind           string         `yaml:"kind"`
+	Clusters       []clusterEntry `yaml:"clusters"`
+	Contexts       []contextEntry `yaml:"contexts"`
+	CurrentContext string         `yaml:"current-context"`
+	Users          []userEntry    `yaml:"users"`
 }
 
 type clusterEntry struct {
@@ -80,6 +81,9 @@ func Validate(data []byte) error {
 		if c.Name == "" {
 			return fmt.Errorf("cluster[%d]: missing name", i)
 		}
+		if _, ok := clusterNames[c.Name]; ok {
+			return fmt.Errorf("cluster[%d] %q: duplicate name", i, c.Name)
+		}
 		if c.Cluster.Server == "" {
 			return fmt.Errorf("cluster[%d] %q: missing server", i, c.Name)
 		}
@@ -92,14 +96,22 @@ func Validate(data []byte) error {
 		if u.Name == "" {
 			return fmt.Errorf("user[%d]: missing name", i)
 		}
+		if _, ok := userNames[u.Name]; ok {
+			return fmt.Errorf("user[%d] %q: duplicate name", i, u.Name)
+		}
 		userNames[u.Name] = struct{}{}
 	}
 
 	// Validate context entries reference defined clusters and users.
+	contextNames := make(map[string]struct{}, len(kc.Contexts))
 	for i, ctx := range kc.Contexts {
 		if ctx.Name == "" {
 			return fmt.Errorf("context[%d]: missing name", i)
 		}
+		if _, ok := contextNames[ctx.Name]; ok {
+			return fmt.Errorf("context[%d] %q: duplicate name", i, ctx.Name)
+		}
+		contextNames[ctx.Name] = struct{}{}
 		if ctx.Context.Cluster == "" {
 			return fmt.Errorf("context[%d] %q: missing cluster reference", i, ctx.Name)
 		}
@@ -111,6 +123,11 @@ func Validate(data []byte) error {
 		}
 		if _, ok := userNames[ctx.Context.User]; !ok {
 			return fmt.Errorf("context[%d] %q: unknown user reference %q", i, ctx.Name, ctx.Context.User)
+		}
+	}
+	if kc.CurrentContext != "" {
+		if _, ok := contextNames[kc.CurrentContext]; !ok {
+			return fmt.Errorf("current-context %q: unknown context", kc.CurrentContext)
 		}
 	}
 

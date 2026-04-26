@@ -78,16 +78,16 @@ func TestEscapePosix(t *testing.T) {
 	}
 }
 
-func TestFormatExport(t *testing.T) {
-	got := FormatExport("KUBECONFIG", "/tmp/my config")
+func TestFormatExportCommand(t *testing.T) {
+	got := formatExport("KUBECONFIG", "/tmp/my config")
 	want := "export KUBECONFIG='/tmp/my config'"
 	if got != want {
 		t.Errorf("FormatExport = %q, want %q", got, want)
 	}
 }
 
-func TestFormatFishSet(t *testing.T) {
-	got := FormatFishSet("KUBECONFIG", "/tmp/config")
+func TestFormatFishSetCommand(t *testing.T) {
+	got := formatFishSet("KUBECONFIG", "/tmp/config")
 	want := "set -gx KUBECONFIG '/tmp/config'"
 	if got != want {
 		t.Errorf("FormatFishSet = %q, want %q", got, want)
@@ -124,18 +124,23 @@ func TestFormatSet(t *testing.T) {
 	tests := []struct {
 		name    string
 		style   string
+		key     string
 		want    string
 		wantErr bool
 	}{
-		{"default", "", "export KUBECONFIG='/tmp/config'", false},
-		{"posix", StylePosix, "export KUBECONFIG='/tmp/config'", false},
-		{"fish", StyleFish, "set -gx KUBECONFIG '/tmp/config'", false},
-		{"invalid", "cmd", "", true},
+		{"default", "", "KUBECONFIG", "export KUBECONFIG='/tmp/config'", false},
+		{"posix", StylePosix, "KUBECONFIG", "export KUBECONFIG='/tmp/config'", false},
+		{"fish", StyleFish, "KUBECONFIG", "set -gx KUBECONFIG '/tmp/config'", false},
+		{"invalid style", "cmd", "KUBECONFIG", "", true},
+		{"empty key", StylePosix, "", "", true},
+		{"leading digit", StylePosix, "1BAD", "", true},
+		{"assignment key", StylePosix, "BAD=1", "", true},
+		{"shell metachar key", StylePosix, "A;rm", "", true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := FormatSet(tt.style, "KUBECONFIG", "/tmp/config")
+			got, err := FormatSet(tt.style, tt.key, "/tmp/config")
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("FormatSet(%q) error = %v, wantErr %v", tt.style, err, tt.wantErr)
 			}

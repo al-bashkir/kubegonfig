@@ -6,6 +6,7 @@
 package profile
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -51,14 +52,6 @@ func (m *Manager) statePath() string {
 	return filepath.Join(m.dataDir, stateDir)
 }
 
-func (m *Manager) profilePath(name string) string {
-	return filepath.Join(m.profilesPath(), profileFileName(name))
-}
-
-func (m *Manager) currentPath() string {
-	return filepath.Join(m.statePath(), currentFile)
-}
-
 func profileFileName(name string) string {
 	return name + gpgExt
 }
@@ -83,8 +76,8 @@ func (m *Manager) readCurrent() ([]byte, error) {
 	return storage.ReadFileInDir(m.statePath(), currentFile)
 }
 
-// withLock executes fn while holding an exclusive file lock.
-func (m *Manager) withLock(fn func() error) (err error) {
+// WithLock executes fn while holding an exclusive file lock.
+func (m *Manager) WithLock(fn func() error) (err error) {
 	lock, err := storage.NewFileLock(m.lockPath())
 	if err != nil {
 		return fmt.Errorf("create lock: %w", err)
@@ -113,7 +106,7 @@ func (m *Manager) Create(name string, data []byte) error {
 		return err
 	}
 
-	return m.withLock(func() error {
+	return m.WithLock(func() error {
 		exists, err := m.profileExists(name)
 		if err != nil {
 			return err
@@ -170,18 +163,15 @@ func (m *Manager) List() ([]string, error) {
 	return names, nil
 }
 
-// Exists checks if a profile with the given name exists.
-func (m *Manager) Exists(name string) bool {
-	exists, err := m.profileExists(name)
-	return err == nil && exists
-}
-
 // Decrypt reads and decrypts a profile, returning the plaintext kubeconfig.
 func (m *Manager) Decrypt(name string) ([]byte, error) {
 	if err := shell.ValidateName(name); err != nil {
 		return nil, err
 	}
+	return m.decryptProfile(name)
+}
 
+func (m *Manager) decryptProfile(name string) ([]byte, error) {
 	encrypted, err := m.readProfile(name)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -197,13 +187,91 @@ func (m *Manager) Decrypt(name string) ([]byte, error) {
 	return data, nil
 }
 
+// Edit decrypts a profile, passes it to edit while holding the profile lock,
+// and stores the edited content if it changed.
+func (m *Manager) Edit(name string, edit func([]byte) ([]byte, error)) (changed bool, err error) {
+	if err := shell.ValidateName(name); err != nil {
+		return false, err
+	}
+	if edit == nil {
+		return false, fmt.Errorf("edit callback must not be nil")
+	}
+
+	err = m.WithLock(func() error {
+		original, err := m.decryptProfile(name)
+		if err != nil {
+			return err
+		}
+
+		edited, err := edit(original)
+		if err != nil {
+			return err
+		}
+		if bytes.Equal(original, edited) {
+			return nil
+		}
+
+		if err := kubeconfig.Validate(edited); err != nil {
+			return fmt.Errorf("invalid kubeconfig: %w", err)
+		}
+		if err := m.cfg.Validate(); err != nil {
+			return err
+		}
+
+		encrypted, err := crypto.Encrypt(edited, m.cfg.Recipients())
+		if err != nil {
+			return fmt.Errorf("encrypt profile: %w", err)
+		}
+		if err := m.writeProfile(name, encrypted); err != nil {
+			return err
+		}
+		changed = true
+		return nil
+	})
+	return changed, err
+}
+
+// Activate decrypts a profile, creates its activation file through create, and
+// records it as current while holding the profile lock.
+func (m *Manager) Activate(name string, create func([]byte) (string, error), cleanup func(string) error) (path string, err error) {
+	if err := shell.ValidateName(name); err != nil {
+		return "", err
+	}
+	if create == nil {
+		return "", fmt.Errorf("activation callback must not be nil")
+	}
+
+	err = m.WithLock(func() error {
+		data, err := m.decryptProfile(name)
+		if err != nil {
+			return err
+		}
+
+		path, err = create(data)
+		if err != nil {
+			return err
+		}
+
+		if err := m.setCurrent(name); err != nil {
+			if cleanup != nil {
+				if cleanupErr := cleanup(path); cleanupErr != nil {
+					return errors.Join(err, fmt.Errorf("cleanup activation file: %w", cleanupErr))
+				}
+			}
+			return err
+		}
+		return nil
+	})
+	return path, err
+}
+
 // Delete removes a profile. If it was active, clears the current state.
 func (m *Manager) Delete(name string) error {
 	if err := shell.ValidateName(name); err != nil {
 		return err
 	}
 
-	return m.withLock(func() error {
+	return m.WithLock(func() error {
 		exists, err := m.profileExists(name)
 		if err != nil {
 			return err
@@ -271,7 +339,7 @@ func (m *Manager) Rename(oldName, newName string) error {
 		return fmt.Errorf("new name: %w", err)
 	}
 
-	return m.withLock(func() error {
+	return m.WithLock(func() error {
 		exists, err := m.profileExists(oldName)
 		if err != nil {
 			return err
@@ -343,23 +411,6 @@ func (m *Manager) profileExists(name string) (bool, error) {
 	return storage.FileExistsInDir(m.profilesPath(), profileFileName(name))
 }
 
-// SetCurrent records the active profile name.
-func (m *Manager) SetCurrent(name string) error {
-	if err := shell.ValidateName(name); err != nil {
-		return err
-	}
-	return m.withLock(func() error {
-		exists, err := m.profileExists(name)
-		if err != nil {
-			return err
-		}
-		if !exists {
-			return fmt.Errorf("profile %q not found", name)
-		}
-		return m.setCurrent(name)
-	})
-}
-
 func (m *Manager) setCurrent(name string) error {
 	return m.writeCurrent(name)
 }
@@ -382,34 +433,4 @@ func (m *Manager) GetCurrent() (string, error) {
 		return "", fmt.Errorf("invalid current profile state: %w", err)
 	}
 	return name, nil
-}
-
-// Update re-encrypts a profile with new data (for edit workflow).
-func (m *Manager) Update(name string, data []byte) error {
-	if err := shell.ValidateName(name); err != nil {
-		return err
-	}
-	if err := kubeconfig.Validate(data); err != nil {
-		return fmt.Errorf("invalid kubeconfig: %w", err)
-	}
-	if err := m.cfg.Validate(); err != nil {
-		return err
-	}
-
-	return m.withLock(func() error {
-		exists, err := m.profileExists(name)
-		if err != nil {
-			return err
-		}
-		if !exists {
-			return fmt.Errorf("profile %q not found", name)
-		}
-
-		encrypted, err := crypto.Encrypt(data, m.cfg.Recipients())
-		if err != nil {
-			return fmt.Errorf("encrypt profile: %w", err)
-		}
-
-		return m.writeProfile(name, encrypted)
-	})
 }
