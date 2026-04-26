@@ -10,9 +10,28 @@ kubegonfig() {
 
     case "$cmd" in
         use|env)
+            local arg
+            local has_shell=0
+            for arg in "$@"; do
+                case "$arg" in
+                    -h|--help)
+                        command kubegonfig "$@"
+                        return $?
+                        ;;
+                    --shell|--shell=*)
+                        has_shell=1
+                        ;;
+                esac
+            done
+
+            local kubegonfig_args=("$@")
+            if [[ $has_shell -eq 0 ]]; then
+                kubegonfig_args+=(--shell posix)
+            fi
+
             local output
             # Only capture stdout; stderr passes through to the terminal.
-            output="$(command kubegonfig "$@")"
+            output="$(command kubegonfig "${kubegonfig_args[@]}")"
             local rc=$?
             if [[ $rc -ne 0 ]]; then
                 return $rc

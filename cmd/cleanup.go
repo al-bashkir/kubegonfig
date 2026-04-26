@@ -12,9 +12,9 @@ import (
 var cleanupCmd = &cobra.Command{
 	Use:   "cleanup",
 	Short: "Remove stale temporary kubeconfig files",
-	Long: `Remove all decrypted kubeconfig files from the runtime directory.
-Run this periodically or when you want to ensure no plaintext
-kubeconfigs remain on disk.`,
+	Long: `Remove stale activation kubeconfig files from the runtime directory.
+Only valid profile-name-shaped *.yaml files in kubegonfig's runtime
+directory are removed.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		count, err := tmpfile.CleanupStale()

@@ -8,13 +8,15 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"runtime"
+	"strings"
 
 	"kubegonfig/internal/tmpfile"
 
 	"github.com/spf13/cobra"
 )
 
-const execKubeconfigPath = "/proc/self/fd/3"
+const execKubeconfigFD = 3
 
 var execCmd = &cobra.Command{
 	Use:   "exec <name> -- <command> [args...]",
@@ -32,6 +34,10 @@ Example:
 	Args:               cobra.MinimumNArgs(1),
 	DisableFlagParsing: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if isHelpRequest(args) {
+			return cmd.Help()
+		}
+
 		// Parse: first arg is profile name, rest after "--" is the command.
 		name := args[0]
 		var cmdArgs []string
@@ -102,16 +108,23 @@ func newExecCommandWithKubeconfig(cmdArgs []string, kubeconfig *os.File) *exec.C
 	child.Stdin = os.Stdin
 	child.Stdout = os.Stdout
 	child.Stderr = os.Stderr
-	child.Env = appendEnv(os.Environ(), "KUBECONFIG", execKubeconfigPath)
+	child.Env = appendEnv(os.Environ(), "KUBECONFIG", execKubeconfigPath())
 	child.ExtraFiles = []*os.File{kubeconfig}
 	return child
+}
+
+func execKubeconfigPath() string {
+	if runtime.GOOS == "linux" {
+		return fmt.Sprintf("/proc/self/fd/%d", execKubeconfigFD)
+	}
+	return fmt.Sprintf("/dev/fd/%d", execKubeconfigFD)
 }
 
 // appendEnv returns env with key=value added or replaced.
 func appendEnv(env []string, key, value string) []string {
 	prefix := key + "="
 	for i, e := range env {
-		if len(e) > len(prefix) && e[:len(prefix)] == prefix {
+		if strings.HasPrefix(e, prefix) {
 			env[i] = prefix + value
 			return env
 		}

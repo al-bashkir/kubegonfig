@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"kubegonfig/internal/config"
@@ -51,15 +52,35 @@ func (m *Manager) statePath() string {
 }
 
 func (m *Manager) profilePath(name string) string {
-	return filepath.Join(m.profilesPath(), name+gpgExt)
+	return filepath.Join(m.profilesPath(), profileFileName(name))
 }
 
 func (m *Manager) currentPath() string {
 	return filepath.Join(m.statePath(), currentFile)
 }
 
+func profileFileName(name string) string {
+	return name + gpgExt
+}
+
 func (m *Manager) lockPath() string {
 	return filepath.Join(m.dataDir, lockFile)
+}
+
+func (m *Manager) writeProfile(name string, data []byte) error {
+	return storage.AtomicWriteInDir(m.profilesPath(), profileFileName(name), data, 0600)
+}
+
+func (m *Manager) readProfile(name string) ([]byte, error) {
+	return storage.ReadFileInDir(m.profilesPath(), profileFileName(name))
+}
+
+func (m *Manager) writeCurrent(name string) error {
+	return storage.AtomicWriteInDir(m.statePath(), currentFile, []byte(name+"\n"), 0600)
+}
+
+func (m *Manager) readCurrent() ([]byte, error) {
+	return storage.ReadFileInDir(m.statePath(), currentFile)
 }
 
 // withLock executes fn while holding an exclusive file lock.
@@ -93,7 +114,11 @@ func (m *Manager) Create(name string, data []byte) error {
 	}
 
 	return m.withLock(func() error {
-		if m.Exists(name) {
+		exists, err := m.profileExists(name)
+		if err != nil {
+			return err
+		}
+		if exists {
 			return fmt.Errorf("profile %q already exists", name)
 		}
 
@@ -102,7 +127,7 @@ func (m *Manager) Create(name string, data []byte) error {
 			return fmt.Errorf("encrypt profile: %w", err)
 		}
 
-		return storage.AtomicWrite(m.profilePath(name), encrypted, 0600)
+		return m.writeProfile(name, encrypted)
 	})
 }
 
@@ -118,28 +143,37 @@ func (m *Manager) Import(name, path string) error {
 // List returns sorted profile names.
 func (m *Manager) List() ([]string, error) {
 	dir := m.profilesPath()
-	entries, err := os.ReadDir(dir)
+	entries, err := storage.ReadDirInDir(dir)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil, nil
-		}
 		return nil, fmt.Errorf("read profiles dir: %w", err)
 	}
 
 	var names []string
 	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), gpgExt) {
+		if !strings.HasSuffix(e.Name(), gpgExt) {
 			continue
 		}
 		name := strings.TrimSuffix(e.Name(), gpgExt)
+		if err := shell.ValidateName(name); err != nil {
+			continue
+		}
+		exists, err := storage.RegularFileInDir(dir, e.Name())
+		if err != nil {
+			return nil, fmt.Errorf("check profile %q: %w", name, err)
+		}
+		if !exists {
+			continue
+		}
 		names = append(names, name)
 	}
+	sort.Strings(names)
 	return names, nil
 }
 
 // Exists checks if a profile with the given name exists.
 func (m *Manager) Exists(name string) bool {
-	return storage.FileExists(m.profilePath(name))
+	exists, err := m.profileExists(name)
+	return err == nil && exists
 }
 
 // Decrypt reads and decrypts a profile, returning the plaintext kubeconfig.
@@ -147,12 +181,12 @@ func (m *Manager) Decrypt(name string) ([]byte, error) {
 	if err := shell.ValidateName(name); err != nil {
 		return nil, err
 	}
-	if !m.Exists(name) {
-		return nil, fmt.Errorf("profile %q not found", name)
-	}
 
-	encrypted, err := storage.ReadFile(m.profilePath(name))
+	encrypted, err := m.readProfile(name)
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("profile %q not found", name)
+		}
 		return nil, err
 	}
 
@@ -170,17 +204,61 @@ func (m *Manager) Delete(name string) error {
 	}
 
 	return m.withLock(func() error {
-		if !m.Exists(name) {
+		exists, err := m.profileExists(name)
+		if err != nil {
+			return err
+		}
+		if !exists {
 			return fmt.Errorf("profile %q not found", name)
 		}
 
 		// Clear current if this profile is active.
-		current, _ := m.GetCurrent()
+		current, err := m.GetCurrent()
+		if err != nil {
+			return fmt.Errorf("read current profile: %w", err)
+		}
+		currentCleared := false
 		if current == name {
-			_ = storage.RemoveFile(m.currentPath())
+			if err := storage.RemoveFileInDir(m.statePath(), currentFile); err != nil {
+				if storage.IsPostCommitError(err) {
+					if restoreErr := m.setCurrent(name); restoreErr != nil {
+						return errors.Join(
+							fmt.Errorf("clear current profile: %w", err),
+							fmt.Errorf("restore current profile: %w", restoreErr),
+						)
+					}
+				}
+				return fmt.Errorf("clear current profile: %w", err)
+			}
+			currentCleared = true
 		}
 
-		return storage.RemoveFile(m.profilePath(name))
+		if err := storage.RemoveFileInDir(m.profilesPath(), profileFileName(name)); err != nil {
+			if currentCleared {
+				exists, existsErr := m.profileExists(name)
+				if existsErr != nil {
+					return errors.Join(
+						fmt.Errorf("delete profile: %w", err),
+						fmt.Errorf("check profile after failed delete: %w", existsErr),
+					)
+				}
+				if exists {
+					if restoreErr := m.setCurrent(name); restoreErr != nil {
+						return errors.Join(
+							fmt.Errorf("delete profile: %w", err),
+							fmt.Errorf("restore current profile: %w", restoreErr),
+						)
+					}
+				} else {
+					return errors.Join(
+						fmt.Errorf("delete profile: %w", err),
+						fmt.Errorf("profile %q may have been removed before the delete error was reported", name),
+					)
+				}
+			}
+			return fmt.Errorf("delete profile: %w", err)
+		}
+		return nil
 	})
 }
 
@@ -194,27 +272,75 @@ func (m *Manager) Rename(oldName, newName string) error {
 	}
 
 	return m.withLock(func() error {
-		if !m.Exists(oldName) {
+		exists, err := m.profileExists(oldName)
+		if err != nil {
+			return err
+		}
+		if !exists {
 			return fmt.Errorf("profile %q not found", oldName)
 		}
-		if m.Exists(newName) {
+		exists, err = m.profileExists(newName)
+		if err != nil {
+			return err
+		}
+		if exists {
 			return fmt.Errorf("profile %q already exists", newName)
 		}
+		current, err := m.GetCurrent()
+		if err != nil {
+			return fmt.Errorf("read current profile: %w", err)
+		}
 
-		oldPath := m.profilePath(oldName)
-		newPath := m.profilePath(newName)
-
-		if err := os.Rename(oldPath, newPath); err != nil {
-			return fmt.Errorf("rename: %w", err)
+		renameErr := storage.RenameFileInDir(m.profilesPath(), profileFileName(oldName), profileFileName(newName))
+		if renameErr != nil && !storage.IsPostCommitError(renameErr) {
+			return fmt.Errorf("rename: %w", renameErr)
 		}
 
 		// Update current pointer if needed.
-		current, _ := m.GetCurrent()
 		if current == oldName {
-			return m.setCurrent(newName)
+			if err := m.setCurrent(newName); err != nil {
+				if renameErr != nil {
+					return errors.Join(fmt.Errorf("rename: %w", renameErr), m.rollbackRenameAfterCurrentFailure(oldName, newName, err))
+				}
+				return m.rollbackRenameAfterCurrentFailure(oldName, newName, err)
+			}
+		}
+		if renameErr != nil {
+			return fmt.Errorf("rename: %w", renameErr)
 		}
 		return nil
 	})
+}
+
+func (m *Manager) rollbackRenameAfterCurrentFailure(oldName, newName string, updateErr error) error {
+	errs := []error{fmt.Errorf("update current profile: %w", updateErr)}
+	rolledBack := true
+	if rollbackErr := storage.RenameFileInDir(m.profilesPath(), profileFileName(newName), profileFileName(oldName)); rollbackErr != nil {
+		rolledBack = false
+		errs = append(errs, fmt.Errorf("rollback rename: %w", rollbackErr))
+	}
+	if !rolledBack {
+		exists, existsErr := m.profileExists(oldName)
+		if existsErr != nil {
+			errs = append(errs, fmt.Errorf("check old profile after failed rollback: %w", existsErr))
+		}
+		rolledBack = exists
+	}
+	current, err := m.GetCurrent()
+	if err != nil {
+		errs = append(errs, fmt.Errorf("read current after failed update: %w", err))
+	} else if current != oldName && rolledBack {
+		if restoreErr := m.setCurrent(oldName); restoreErr != nil {
+			errs = append(errs, fmt.Errorf("restore current profile: %w", restoreErr))
+		}
+	} else if current != oldName {
+		errs = append(errs, fmt.Errorf("current profile may still point to %q because profile rollback did not restore %q", current, oldName))
+	}
+	return errors.Join(errs...)
+}
+
+func (m *Manager) profileExists(name string) (bool, error) {
+	return storage.FileExistsInDir(m.profilesPath(), profileFileName(name))
 }
 
 // SetCurrent records the active profile name.
@@ -222,29 +348,40 @@ func (m *Manager) SetCurrent(name string) error {
 	if err := shell.ValidateName(name); err != nil {
 		return err
 	}
-	if !m.Exists(name) {
-		return fmt.Errorf("profile %q not found", name)
-	}
 	return m.withLock(func() error {
+		exists, err := m.profileExists(name)
+		if err != nil {
+			return err
+		}
+		if !exists {
+			return fmt.Errorf("profile %q not found", name)
+		}
 		return m.setCurrent(name)
 	})
 }
 
 func (m *Manager) setCurrent(name string) error {
-	return storage.AtomicWrite(m.currentPath(), []byte(name+"\n"), 0600)
+	return m.writeCurrent(name)
 }
 
 // GetCurrent returns the name of the currently active profile.
 // Returns empty string and nil error if no profile is active.
 func (m *Manager) GetCurrent() (string, error) {
-	data, err := storage.ReadFile(m.currentPath())
+	data, err := m.readCurrent()
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return "", nil
 		}
 		return "", err
 	}
-	return strings.TrimSpace(string(data)), nil
+	name := strings.TrimSpace(string(data))
+	if name == "" {
+		return "", nil
+	}
+	if err := shell.ValidateName(name); err != nil {
+		return "", fmt.Errorf("invalid current profile state: %w", err)
+	}
+	return name, nil
 }
 
 // Update re-encrypts a profile with new data (for edit workflow).
@@ -260,7 +397,11 @@ func (m *Manager) Update(name string, data []byte) error {
 	}
 
 	return m.withLock(func() error {
-		if !m.Exists(name) {
+		exists, err := m.profileExists(name)
+		if err != nil {
+			return err
+		}
+		if !exists {
 			return fmt.Errorf("profile %q not found", name)
 		}
 
@@ -269,6 +410,6 @@ func (m *Manager) Update(name string, data []byte) error {
 			return fmt.Errorf("encrypt profile: %w", err)
 		}
 
-		return storage.AtomicWrite(m.profilePath(name), encrypted, 0600)
+		return m.writeProfile(name, encrypted)
 	})
 }
