@@ -28,7 +28,8 @@ Why eval? A child process (kubegonfig) cannot modify the environment
 of its parent process (your shell). This is a fundamental Unix
 process model constraint. The eval pattern lets your shell interpret
 the export command that kubegonfig prints to stdout.`,
-	Args: cobra.ExactArgs(1),
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: completeProfileNames,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		exportCmd, err := activateProfile(args[0], envShell)
 		if err != nil {

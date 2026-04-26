@@ -78,7 +78,7 @@ func skipSetup(cmd *cobra.Command, args []string) bool {
 		return true
 	}
 	switch cmd.Name() {
-	case "init", "help", "completion", "version":
+	case "init", "help", "completion", "version", cobra.ShellCompRequestCmd, cobra.ShellCompNoDescRequestCmd:
 		return true
 	default:
 		return false
