@@ -27,7 +27,7 @@
       "source_file": "internal/profile/profile.go",
       "source_location": "L1",
       "id": "internal_profile_profile_go",
-      "community": 6,
+      "community": 7,
       "norm_label": "profile.go"
     },
     {
@@ -36,7 +36,7 @@
       "source_file": "internal/profile/profile.go",
       "source_location": "L33",
       "id": "profile_manager",
-      "community": 6,
+      "community": 7,
       "norm_label": "manager"
     },
     {
@@ -45,7 +45,7 @@
       "source_file": "internal/profile/profile.go",
       "source_location": "L39",
       "id": "profile_newmanager",
-      "community": 6,
+      "community": 7,
       "norm_label": "newmanager()"
     },
     {
@@ -81,7 +81,7 @@
       "source_file": "internal/profile/profile.go",
       "source_location": "L59",
       "id": "profile_manager_lockpath",
-      "community": 6,
+      "community": 7,
       "norm_label": ".lockpath()"
     },
     {
@@ -90,7 +90,7 @@
       "source_file": "internal/profile/profile.go",
       "source_location": "L63",
       "id": "profile_manager_writeprofile",
-      "community": 6,
+      "community": 7,
       "norm_label": ".writeprofile()"
     },
     {
@@ -99,7 +99,7 @@
       "source_file": "internal/profile/profile.go",
       "source_location": "L67",
       "id": "profile_manager_readprofile",
-      "community": 6,
+      "community": 7,
       "norm_label": ".readprofile()"
     },
     {
@@ -126,7 +126,7 @@
       "source_file": "internal/profile/profile.go",
       "source_location": "L80",
       "id": "profile_manager_withlock",
-      "community": 6,
+      "community": 7,
       "norm_label": ".withlock()"
     },
     {
@@ -135,7 +135,7 @@
       "source_file": "internal/profile/profile.go",
       "source_location": "L98",
       "id": "profile_manager_create",
-      "community": 6,
+      "community": 7,
       "norm_label": ".create()"
     },
     {
@@ -144,7 +144,7 @@
       "source_file": "internal/profile/profile.go",
       "source_location": "L128",
       "id": "profile_manager_import",
-      "community": 6,
+      "community": 7,
       "norm_label": ".import()"
     },
     {
@@ -162,7 +162,7 @@
       "source_file": "internal/profile/profile.go",
       "source_location": "L167",
       "id": "profile_manager_decrypt",
-      "community": 6,
+      "community": 7,
       "norm_label": ".decrypt()"
     },
     {
@@ -171,7 +171,7 @@
       "source_file": "internal/profile/profile.go",
       "source_location": "L174",
       "id": "profile_manager_decryptprofile",
-      "community": 6,
+      "community": 7,
       "norm_label": ".decryptprofile()"
     },
     {
@@ -180,7 +180,7 @@
       "source_file": "internal/profile/profile.go",
       "source_location": "L192",
       "id": "profile_manager_edit",
-      "community": 6,
+      "community": 7,
       "norm_label": ".edit()"
     },
     {
@@ -189,7 +189,7 @@
       "source_file": "internal/profile/profile.go",
       "source_location": "L236",
       "id": "profile_manager_activate",
-      "community": 6,
+      "community": 7,
       "norm_label": ".activate()"
     },
     {
@@ -783,7 +783,7 @@
       "source_file": "internal/kubeconfig/validate.go",
       "source_location": "L1",
       "id": "internal_kubeconfig_validate_go",
-      "community": 12,
+      "community": 13,
       "norm_label": "validate.go"
     },
     {
@@ -792,7 +792,7 @@
       "source_file": "internal/kubeconfig/validate.go",
       "source_location": "L16",
       "id": "kubeconfig_kubeconfig",
-      "community": 12,
+      "community": 13,
       "norm_label": "kubeconfig"
     },
     {
@@ -801,7 +801,7 @@
       "source_file": "internal/kubeconfig/validate.go",
       "source_location": "L25",
       "id": "kubeconfig_clusterentry",
-      "community": 12,
+      "community": 13,
       "norm_label": "clusterentry"
     },
     {
@@ -810,7 +810,7 @@
       "source_file": "internal/kubeconfig/validate.go",
       "source_location": "L30",
       "id": "kubeconfig_clusterdata",
-      "community": 12,
+      "community": 13,
       "norm_label": "clusterdata"
     },
     {
@@ -819,7 +819,7 @@
       "source_file": "internal/kubeconfig/validate.go",
       "source_location": "L34",
       "id": "kubeconfig_contextentry",
-      "community": 12,
+      "community": 13,
       "norm_label": "contextentry"
     },
     {
@@ -828,7 +828,7 @@
       "source_file": "internal/kubeconfig/validate.go",
       "source_location": "L39",
       "id": "kubeconfig_contextdata",
-      "community": 12,
+      "community": 13,
       "norm_label": "contextdata"
     },
     {
@@ -837,7 +837,7 @@
       "source_file": "internal/kubeconfig/validate.go",
       "source_location": "L44",
       "id": "kubeconfig_userentry",
-      "community": 12,
+      "community": 13,
       "norm_label": "userentry"
     },
     {
@@ -846,7 +846,7 @@
       "source_file": "internal/kubeconfig/validate.go",
       "source_location": "L49",
       "id": "validate_validate",
-      "community": 12,
+      "community": 13,
       "norm_label": "validate()"
     },
     {
@@ -855,7 +855,7 @@
       "source_file": "internal/editor/editor_test.go",
       "source_location": "L1",
       "id": "internal_editor_editor_test_go",
-      "community": 11,
+      "community": 12,
       "norm_label": "editor_test.go"
     },
     {
@@ -864,7 +864,7 @@
       "source_file": "internal/editor/editor_test.go",
       "source_location": "L11",
       "id": "editor_test_testresolveeditorprefersvisual",
-      "community": 11,
+      "community": 12,
       "norm_label": "testresolveeditorprefersvisual()"
     },
     {
@@ -873,7 +873,7 @@
       "source_file": "internal/editor/editor_test.go",
       "source_location": "L24",
       "id": "editor_test_testresolveeditoruseseditorwhenvisualunset",
-      "community": 11,
+      "community": 12,
       "norm_label": "testresolveeditoruseseditorwhenvisualunset()"
     },
     {
@@ -882,7 +882,7 @@
       "source_file": "internal/editor/editor_test.go",
       "source_location": "L37",
       "id": "editor_test_testsplitcommandline",
-      "community": 11,
+      "community": 12,
       "norm_label": "testsplitcommandline()"
     },
     {
@@ -891,7 +891,7 @@
       "source_file": "internal/editor/editor_test.go",
       "source_location": "L60",
       "id": "editor_test_testsplitcommandlinerejectsunterminatedquote",
-      "community": 11,
+      "community": 12,
       "norm_label": "testsplitcommandlinerejectsunterminatedquote()"
     },
     {
@@ -900,7 +900,7 @@
       "source_file": "internal/editor/editor.go",
       "source_location": "L1",
       "id": "internal_editor_editor_go",
-      "community": 11,
+      "community": 12,
       "norm_label": "editor.go"
     },
     {
@@ -909,7 +909,7 @@
       "source_file": "internal/editor/editor.go",
       "source_location": "L21",
       "id": "editor_resolveeditor",
-      "community": 11,
+      "community": 12,
       "norm_label": "resolveeditor()"
     },
     {
@@ -918,7 +918,7 @@
       "source_file": "internal/editor/editor.go",
       "source_location": "L39",
       "id": "editor_edit",
-      "community": 11,
+      "community": 12,
       "norm_label": "edit()"
     },
     {
@@ -927,7 +927,7 @@
       "source_file": "internal/editor/editor.go",
       "source_location": "L89",
       "id": "editor_splitcommandline",
-      "community": 11,
+      "community": 12,
       "norm_label": "splitcommandline()"
     },
     {
@@ -1521,7 +1521,7 @@
       "source_file": "internal/config/config.go",
       "source_location": "L89",
       "id": "config_config_recipients",
-      "community": 6,
+      "community": 7,
       "norm_label": ".recipients()"
     },
     {
@@ -1962,7 +1962,7 @@
       "source_file": "internal/tmpfile/tmpfile.go",
       "source_location": "L174",
       "id": "tmpfile_setupsignalhandler",
-      "community": 9,
+      "community": 2,
       "norm_label": "setupsignalhandler()"
     },
     {
@@ -2115,7 +2115,7 @@
       "source_file": "internal/shell/shell.go",
       "source_location": "L1",
       "id": "internal_shell_shell_go",
-      "community": 7,
+      "community": 6,
       "norm_label": "shell.go"
     },
     {
@@ -2124,7 +2124,7 @@
       "source_file": "internal/shell/shell.go",
       "source_location": "L28",
       "id": "shell_validatename",
-      "community": 6,
+      "community": 7,
       "norm_label": "validatename()"
     },
     {
@@ -2133,7 +2133,7 @@
       "source_file": "internal/shell/shell.go",
       "source_location": "L47",
       "id": "shell_escapeposix",
-      "community": 7,
+      "community": 6,
       "norm_label": "escapeposix()"
     },
     {
@@ -2142,7 +2142,7 @@
       "source_file": "internal/shell/shell.go",
       "source_location": "L51",
       "id": "shell_validateenvkey",
-      "community": 7,
+      "community": 6,
       "norm_label": "validateenvkey()"
     },
     {
@@ -2151,7 +2151,7 @@
       "source_file": "internal/shell/shell.go",
       "source_location": "L58",
       "id": "shell_formatexport",
-      "community": 7,
+      "community": 6,
       "norm_label": "formatexport()"
     },
     {
@@ -2160,7 +2160,7 @@
       "source_file": "internal/shell/shell.go",
       "source_location": "L62",
       "id": "shell_formatfishset",
-      "community": 7,
+      "community": 6,
       "norm_label": "formatfishset()"
     },
     {
@@ -2169,7 +2169,7 @@
       "source_file": "internal/shell/shell.go",
       "source_location": "L67",
       "id": "shell_normalizestyle",
-      "community": 7,
+      "community": 6,
       "norm_label": "normalizestyle()"
     },
     {
@@ -2178,7 +2178,7 @@
       "source_file": "internal/shell/shell.go",
       "source_location": "L80",
       "id": "shell_formatset",
-      "community": 7,
+      "community": 6,
       "norm_label": "formatset()"
     },
     {
@@ -2187,7 +2187,7 @@
       "source_file": "internal/shell/shell_test.go",
       "source_location": "L1",
       "id": "internal_shell_shell_test_go",
-      "community": 7,
+      "community": 6,
       "norm_label": "shell_test.go"
     },
     {
@@ -2196,7 +2196,7 @@
       "source_file": "internal/shell/shell_test.go",
       "source_location": "L10",
       "id": "shell_test_testvalidatename",
-      "community": 7,
+      "community": 6,
       "norm_label": "testvalidatename()"
     },
     {
@@ -2205,7 +2205,7 @@
       "source_file": "internal/shell/shell_test.go",
       "source_location": "L54",
       "id": "shell_test_testescapeposix",
-      "community": 7,
+      "community": 6,
       "norm_label": "testescapeposix()"
     },
     {
@@ -2214,7 +2214,7 @@
       "source_file": "internal/shell/shell_test.go",
       "source_location": "L81",
       "id": "shell_test_testformatexportcommand",
-      "community": 7,
+      "community": 6,
       "norm_label": "testformatexportcommand()"
     },
     {
@@ -2223,7 +2223,7 @@
       "source_file": "internal/shell/shell_test.go",
       "source_location": "L89",
       "id": "shell_test_testformatfishsetcommand",
-      "community": 7,
+      "community": 6,
       "norm_label": "testformatfishsetcommand()"
     },
     {
@@ -2232,7 +2232,7 @@
       "source_file": "internal/shell/shell_test.go",
       "source_location": "L97",
       "id": "shell_test_testnormalizestyle",
-      "community": 7,
+      "community": 6,
       "norm_label": "testnormalizestyle()"
     },
     {
@@ -2241,7 +2241,7 @@
       "source_file": "internal/shell/shell_test.go",
       "source_location": "L123",
       "id": "shell_test_testformatset",
-      "community": 7,
+      "community": 6,
       "norm_label": "testformatset()"
     },
     {
@@ -2250,7 +2250,7 @@
       "source_file": "cmd/list.go",
       "source_location": "L1",
       "id": "cmd_list_go",
-      "community": 18,
+      "community": 19,
       "norm_label": "list.go"
     },
     {
@@ -2259,16 +2259,16 @@
       "source_file": "cmd/delete.go",
       "source_location": "L1",
       "id": "cmd_delete_go",
-      "community": 13,
+      "community": 14,
       "norm_label": "delete.go"
     },
     {
       "label": "init()",
       "file_type": "code",
       "source_file": "cmd/delete.go",
-      "source_location": "L51",
+      "source_location": "L52",
       "id": "delete_init",
-      "community": 13,
+      "community": 14,
       "norm_label": "init()"
     },
     {
@@ -2277,7 +2277,7 @@
       "source_file": "cmd/create.go",
       "source_location": "L1",
       "id": "cmd_create_go",
-      "community": 14,
+      "community": 15,
       "norm_label": "create.go"
     },
     {
@@ -2286,7 +2286,7 @@
       "source_file": "cmd/create.go",
       "source_location": "L66",
       "id": "create_init",
-      "community": 14,
+      "community": 15,
       "norm_label": "init()"
     },
     {
@@ -2295,7 +2295,7 @@
       "source_file": "cmd/activate.go",
       "source_location": "L1",
       "id": "cmd_activate_go",
-      "community": 7,
+      "community": 6,
       "norm_label": "activate.go"
     },
     {
@@ -2304,7 +2304,7 @@
       "source_file": "cmd/activate.go",
       "source_location": "L11",
       "id": "activate_activeshellstyle",
-      "community": 7,
+      "community": 6,
       "norm_label": "activeshellstyle()"
     },
     {
@@ -2313,7 +2313,7 @@
       "source_file": "cmd/activate.go",
       "source_location": "L19",
       "id": "activate_activateprofile",
-      "community": 7,
+      "community": 6,
       "norm_label": "activateprofile()"
     },
     {
@@ -2322,7 +2322,7 @@
       "source_file": "cmd/list_test.go",
       "source_location": "L1",
       "id": "cmd_list_test_go",
-      "community": 6,
+      "community": 7,
       "norm_label": "list_test.go"
     },
     {
@@ -2331,7 +2331,7 @@
       "source_file": "cmd/list_test.go",
       "source_location": "L16",
       "id": "list_test_testlistrejectsinvalidcurrentstate",
-      "community": 6,
+      "community": 7,
       "norm_label": "testlistrejectsinvalidcurrentstate()"
     },
     {
@@ -2430,7 +2430,7 @@
       "source_file": "cmd/import.go",
       "source_location": "L1",
       "id": "cmd_import_go",
-      "community": 15,
+      "community": 16,
       "norm_label": "import.go"
     },
     {
@@ -2439,7 +2439,7 @@
       "source_file": "cmd/import.go",
       "source_location": "L30",
       "id": "import_init",
-      "community": 15,
+      "community": 16,
       "norm_label": "init()"
     },
     {
@@ -2524,21 +2524,30 @@
       "norm_label": "testskipsetupforcompletionsubcommand()"
     },
     {
+      "label": "TestSkipSetupForShellCompletionRequest()",
+      "file_type": "code",
+      "source_file": "cmd/root_test.go",
+      "source_location": "L47",
+      "id": "root_test_testskipsetupforshellcompletionrequest",
+      "community": 9,
+      "norm_label": "testskipsetupforshellcompletionrequest()"
+    },
+    {
       "label": "env.go",
       "file_type": "code",
       "source_file": "cmd/env.go",
       "source_location": "L1",
       "id": "cmd_env_go",
-      "community": 16,
+      "community": 17,
       "norm_label": "env.go"
     },
     {
       "label": "init()",
       "file_type": "code",
       "source_file": "cmd/env.go",
-      "source_location": "L42",
+      "source_location": "L43",
       "id": "env_init",
-      "community": 16,
+      "community": 17,
       "norm_label": "init()"
     },
     {
@@ -2605,6 +2614,42 @@
       "norm_label": "info()"
     },
     {
+      "label": "completion.go",
+      "file_type": "code",
+      "source_file": "cmd/completion.go",
+      "source_location": "L1",
+      "id": "cmd_completion_go",
+      "community": 10,
+      "norm_label": "completion.go"
+    },
+    {
+      "label": "completeProfileNames()",
+      "file_type": "code",
+      "source_file": "cmd/completion.go",
+      "source_location": "L16",
+      "id": "completion_completeprofilenames",
+      "community": 10,
+      "norm_label": "completeprofilenames()"
+    },
+    {
+      "label": "completeRenameOldProfile()",
+      "file_type": "code",
+      "source_file": "cmd/completion.go",
+      "source_location": "L47",
+      "id": "completion_completerenameoldprofile",
+      "community": 10,
+      "norm_label": "completerenameoldprofile()"
+    },
+    {
+      "label": "completeExecProfileName()",
+      "file_type": "code",
+      "source_file": "cmd/completion.go",
+      "source_location": "L54",
+      "id": "completion_completeexecprofilename",
+      "community": 10,
+      "norm_label": "completeexecprofilename()"
+    },
+    {
       "label": "init_test.go",
       "file_type": "code",
       "source_file": "cmd/init_test.go",
@@ -2628,16 +2673,16 @@
       "source_file": "cmd/use.go",
       "source_location": "L1",
       "id": "cmd_use_go",
-      "community": 17,
+      "community": 18,
       "norm_label": "use.go"
     },
     {
       "label": "init()",
       "file_type": "code",
       "source_file": "cmd/use.go",
-      "source_location": "L44",
+      "source_location": "L45",
       "id": "use_init",
-      "community": 17,
+      "community": 18,
       "norm_label": "init()"
     },
     {
@@ -2646,7 +2691,7 @@
       "source_file": "cmd/edit.go",
       "source_location": "L1",
       "id": "cmd_edit_go",
-      "community": 19,
+      "community": 20,
       "norm_label": "edit.go"
     },
     {
@@ -2655,7 +2700,7 @@
       "source_file": "cmd/current.go",
       "source_location": "L1",
       "id": "cmd_current_go",
-      "community": 20,
+      "community": 21,
       "norm_label": "current.go"
     },
     {
@@ -2671,16 +2716,16 @@
       "label": "runExecProfile()",
       "file_type": "code",
       "source_file": "cmd/exec.go",
-      "source_location": "L67",
+      "source_location": "L68",
       "id": "exec_runexecprofile",
-      "community": 2,
+      "community": 8,
       "norm_label": "runexecprofile()"
     },
     {
       "label": "runExecWithKubeconfigFile()",
       "file_type": "code",
       "source_file": "cmd/exec.go",
-      "source_location": "L90",
+      "source_location": "L91",
       "id": "exec_runexecwithkubeconfigfile",
       "community": 8,
       "norm_label": "runexecwithkubeconfigfile()"
@@ -2689,7 +2734,7 @@
       "label": "runCommandWithKubeconfig()",
       "file_type": "code",
       "source_file": "cmd/exec.go",
-      "source_location": "L102",
+      "source_location": "L103",
       "id": "exec_runcommandwithkubeconfig",
       "community": 8,
       "norm_label": "runcommandwithkubeconfig()"
@@ -2698,7 +2743,7 @@
       "label": "newExecCommandWithKubeconfig()",
       "file_type": "code",
       "source_file": "cmd/exec.go",
-      "source_location": "L115",
+      "source_location": "L116",
       "id": "exec_newexeccommandwithkubeconfig",
       "community": 8,
       "norm_label": "newexeccommandwithkubeconfig()"
@@ -2707,7 +2752,7 @@
       "label": "execKubeconfigPath()",
       "file_type": "code",
       "source_file": "cmd/exec.go",
-      "source_location": "L125",
+      "source_location": "L126",
       "id": "exec_execkubeconfigpath",
       "community": 8,
       "norm_label": "execkubeconfigpath()"
@@ -2716,7 +2761,7 @@
       "label": "appendEnv()",
       "file_type": "code",
       "source_file": "cmd/exec.go",
-      "source_location": "L133",
+      "source_location": "L134",
       "id": "exec_appendenv",
       "community": 8,
       "norm_label": "appendenv()"
@@ -2727,8 +2772,80 @@
       "source_file": "cmd/cleanup.go",
       "source_location": "L1",
       "id": "cmd_cleanup_go",
-      "community": 21,
+      "community": 22,
       "norm_label": "cleanup.go"
+    },
+    {
+      "label": "completion_test.go",
+      "file_type": "code",
+      "source_file": "cmd/completion_test.go",
+      "source_location": "L1",
+      "id": "cmd_completion_test_go",
+      "community": 10,
+      "norm_label": "completion_test.go"
+    },
+    {
+      "label": "TestCompleteProfileNames()",
+      "file_type": "code",
+      "source_file": "cmd/completion_test.go",
+      "source_location": "L15",
+      "id": "completion_test_testcompleteprofilenames",
+      "community": 10,
+      "norm_label": "testcompleteprofilenames()"
+    },
+    {
+      "label": "TestCompleteProfileNamesFiltersPrefix()",
+      "file_type": "code",
+      "source_file": "cmd/completion_test.go",
+      "source_location": "L28",
+      "id": "completion_test_testcompleteprofilenamesfiltersprefix",
+      "community": 10,
+      "norm_label": "testcompleteprofilenamesfiltersprefix()"
+    },
+    {
+      "label": "TestExecCommandCompletesProfileName()",
+      "file_type": "code",
+      "source_file": "cmd/completion_test.go",
+      "source_location": "L41",
+      "id": "completion_test_testexeccommandcompletesprofilename",
+      "community": 10,
+      "norm_label": "testexeccommandcompletesprofilename()"
+    },
+    {
+      "label": "TestProfileCompletionStopsAfterProfileArg()",
+      "file_type": "code",
+      "source_file": "cmd/completion_test.go",
+      "source_location": "L54",
+      "id": "completion_test_testprofilecompletionstopsafterprofilearg",
+      "community": 10,
+      "norm_label": "testprofilecompletionstopsafterprofilearg()"
+    },
+    {
+      "label": "TestExecCompletionUsesDefaultAfterProfileArg()",
+      "file_type": "code",
+      "source_file": "cmd/completion_test.go",
+      "source_location": "L66",
+      "id": "completion_test_testexeccompletionusesdefaultafterprofilearg",
+      "community": 10,
+      "norm_label": "testexeccompletionusesdefaultafterprofilearg()"
+    },
+    {
+      "label": "TestRenameCompletesOnlyOldProfileName()",
+      "file_type": "code",
+      "source_file": "cmd/completion_test.go",
+      "source_location": "L78",
+      "id": "completion_test_testrenamecompletesonlyoldprofilename",
+      "community": 10,
+      "norm_label": "testrenamecompletesonlyoldprofilename()"
+    },
+    {
+      "label": "setupCompletionProfiles()",
+      "file_type": "code",
+      "source_file": "cmd/completion_test.go",
+      "source_location": "L99",
+      "id": "completion_test_setupcompletionprofiles",
+      "community": 10,
+      "norm_label": "setupcompletionprofiles()"
     },
     {
       "label": "rename.go",
@@ -2736,7 +2853,7 @@
       "source_file": "cmd/rename.go",
       "source_location": "L1",
       "id": "cmd_rename_go",
-      "community": 22,
+      "community": 23,
       "norm_label": "rename.go"
     },
     {
@@ -2745,7 +2862,7 @@
       "source_file": "shell/wrappers_test.go",
       "source_location": "L1",
       "id": "shell_wrappers_test_go",
-      "community": 10,
+      "community": 11,
       "norm_label": "wrappers_test.go"
     },
     {
@@ -2754,7 +2871,7 @@
       "source_file": "shell/wrappers_test.go",
       "source_location": "L15",
       "id": "wrappers_test_testbashwrapperhelppassesthroughwithouteval",
-      "community": 10,
+      "community": 11,
       "norm_label": "testbashwrapperhelppassesthroughwithouteval()"
     },
     {
@@ -2763,7 +2880,7 @@
       "source_file": "shell/wrappers_test.go",
       "source_location": "L19",
       "id": "wrappers_test_testzshwrapperhelppassesthroughwithouteval",
-      "community": 10,
+      "community": 11,
       "norm_label": "testzshwrapperhelppassesthroughwithouteval()"
     },
     {
@@ -2772,7 +2889,7 @@
       "source_file": "shell/wrappers_test.go",
       "source_location": "L23",
       "id": "wrappers_test_testbashwrapperaddsdefaultposixshellstyle",
-      "community": 10,
+      "community": 11,
       "norm_label": "testbashwrapperaddsdefaultposixshellstyle()"
     },
     {
@@ -2781,7 +2898,7 @@
       "source_file": "shell/wrappers_test.go",
       "source_location": "L27",
       "id": "wrappers_test_testzshwrapperaddsdefaultposixshellstyle",
-      "community": 10,
+      "community": 11,
       "norm_label": "testzshwrapperaddsdefaultposixshellstyle()"
     },
     {
@@ -2790,7 +2907,7 @@
       "source_file": "shell/wrappers_test.go",
       "source_location": "L31",
       "id": "wrappers_test_testfishwrapperhelppassesthroughwithouteval",
-      "community": 10,
+      "community": 11,
       "norm_label": "testfishwrapperhelppassesthroughwithouteval()"
     },
     {
@@ -2799,7 +2916,7 @@
       "source_file": "shell/wrappers_test.go",
       "source_location": "L35",
       "id": "wrappers_test_testfishwrapperaddsdefaultfishshellstyle",
-      "community": 10,
+      "community": 11,
       "norm_label": "testfishwrapperaddsdefaultfishshellstyle()"
     },
     {
@@ -2808,7 +2925,7 @@
       "source_file": "shell/wrappers_test.go",
       "source_location": "L39",
       "id": "wrappers_test_testwrapperhelppassesthroughwithouteval",
-      "community": 10,
+      "community": 11,
       "norm_label": "testwrapperhelppassesthroughwithouteval()"
     },
     {
@@ -2817,7 +2934,7 @@
       "source_file": "shell/wrappers_test.go",
       "source_location": "L97",
       "id": "wrappers_test_testwrapperaddsdefaultposixshellstyle",
-      "community": 10,
+      "community": 11,
       "norm_label": "testwrapperaddsdefaultposixshellstyle()"
     },
     {
@@ -2826,7 +2943,7 @@
       "source_file": "shell/wrappers_test.go",
       "source_location": "L310",
       "id": "wrappers_test_writestubkubegonfig",
-      "community": 10,
+      "community": 11,
       "norm_label": "writestubkubegonfig()"
     },
     {
@@ -2835,7 +2952,7 @@
       "source_file": "shell/wrappers_test.go",
       "source_location": "L329",
       "id": "wrappers_test_joinshellargs",
-      "community": 10,
+      "community": 11,
       "norm_label": "joinshellargs()"
     },
     {
@@ -2844,7 +2961,7 @@
       "source_file": "shell/wrappers_test.go",
       "source_location": "L337",
       "id": "wrappers_test_shellquote",
-      "community": 10,
+      "community": 11,
       "norm_label": "shellquote()"
     }
   ],
@@ -3208,6 +3325,18 @@
       "_tgt": "list_test_testlistrejectsinvalidcurrentstate",
       "source": "profile_newmanager",
       "target": "list_test_testlistrejectsinvalidcurrentstate"
+    },
+    {
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "cmd/completion.go",
+      "source_location": "L26",
+      "weight": 1.0,
+      "_src": "profile_newmanager",
+      "_tgt": "completion_completeprofilenames",
+      "source": "profile_newmanager",
+      "target": "completion_completeprofilenames"
     },
     {
       "relation": "calls",
@@ -4024,6 +4153,18 @@
       "_tgt": "profile_test_testlistprofilesskipsinvalidandspecialentries",
       "source": "profile_manager_list",
       "target": "profile_test_testlistprofilesskipsinvalidandspecialentries"
+    },
+    {
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "cmd/completion.go",
+      "source_location": "L32",
+      "weight": 1.0,
+      "_src": "profile_manager_list",
+      "_tgt": "completion_completeprofilenames",
+      "source": "profile_manager_list",
+      "target": "completion_completeprofilenames"
     },
     {
       "relation": "calls",
@@ -9525,6 +9666,18 @@
       "relation": "calls",
       "confidence": "INFERRED",
       "confidence_score": 0.8,
+      "source_file": "cmd/completion.go",
+      "source_location": "L21",
+      "weight": 1.0,
+      "_src": "config_load",
+      "_tgt": "completion_completeprofilenames",
+      "source": "config_load",
+      "target": "completion_completeprofilenames"
+    },
+    {
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
       "source_file": "internal/config/config_test.go",
       "source_location": "L114",
       "weight": 1.0,
@@ -11397,7 +11550,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "cmd/delete.go",
-      "source_location": "L51",
+      "source_location": "L52",
       "weight": 1.0,
       "_src": "cmd_delete_go",
       "_tgt": "delete_init",
@@ -11874,6 +12027,18 @@
       "confidence_score": 1.0
     },
     {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "cmd/root_test.go",
+      "source_location": "L47",
+      "weight": 1.0,
+      "_src": "cmd_root_test_go",
+      "_tgt": "root_test_testskipsetupforshellcompletionrequest",
+      "source": "cmd_root_test_go",
+      "target": "root_test_testskipsetupforshellcompletionrequest",
+      "confidence_score": 1.0
+    },
+    {
       "relation": "calls",
       "confidence": "INFERRED",
       "confidence_score": 0.8,
@@ -11922,10 +12087,22 @@
       "target": "root_skipsetup"
     },
     {
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "cmd/root_test.go",
+      "source_location": "L50",
+      "weight": 1.0,
+      "_src": "root_test_testskipsetupforshellcompletionrequest",
+      "_tgt": "root_skipsetup",
+      "source": "root_test_testskipsetupforshellcompletionrequest",
+      "target": "root_skipsetup"
+    },
+    {
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "cmd/env.go",
-      "source_location": "L42",
+      "source_location": "L43",
       "weight": 1.0,
       "_src": "cmd_env_go",
       "_tgt": "env_init",
@@ -12020,6 +12197,102 @@
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
+      "source_file": "cmd/completion.go",
+      "source_location": "L16",
+      "weight": 1.0,
+      "_src": "cmd_completion_go",
+      "_tgt": "completion_completeprofilenames",
+      "source": "cmd_completion_go",
+      "target": "completion_completeprofilenames",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "cmd/completion.go",
+      "source_location": "L47",
+      "weight": 1.0,
+      "_src": "cmd_completion_go",
+      "_tgt": "completion_completerenameoldprofile",
+      "source": "cmd_completion_go",
+      "target": "completion_completerenameoldprofile",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "cmd/completion.go",
+      "source_location": "L54",
+      "weight": 1.0,
+      "_src": "cmd_completion_go",
+      "_tgt": "completion_completeexecprofilename",
+      "source": "cmd_completion_go",
+      "target": "completion_completeexecprofilename",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "cmd/completion.go",
+      "source_location": "L51",
+      "weight": 1.0,
+      "_src": "completion_completerenameoldprofile",
+      "_tgt": "completion_completeprofilenames",
+      "source": "completion_completeprofilenames",
+      "target": "completion_completerenameoldprofile",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "cmd/completion.go",
+      "source_location": "L58",
+      "weight": 1.0,
+      "_src": "completion_completeexecprofilename",
+      "_tgt": "completion_completeprofilenames",
+      "source": "completion_completeprofilenames",
+      "target": "completion_completeexecprofilename",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "cmd/completion_test.go",
+      "source_location": "L18",
+      "weight": 1.0,
+      "_src": "completion_completeprofilenames",
+      "_tgt": "completion_test_testcompleteprofilenames",
+      "source": "completion_completeprofilenames",
+      "target": "completion_test_testcompleteprofilenames"
+    },
+    {
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "cmd/completion_test.go",
+      "source_location": "L31",
+      "weight": 1.0,
+      "_src": "completion_completeprofilenames",
+      "_tgt": "completion_test_testcompleteprofilenamesfiltersprefix",
+      "source": "completion_completeprofilenames",
+      "target": "completion_test_testcompleteprofilenamesfiltersprefix"
+    },
+    {
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "cmd/completion_test.go",
+      "source_location": "L57",
+      "weight": 1.0,
+      "_src": "completion_completeprofilenames",
+      "_tgt": "completion_test_testprofilecompletionstopsafterprofilearg",
+      "source": "completion_completeprofilenames",
+      "target": "completion_test_testprofilecompletionstopsafterprofilearg"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
       "source_file": "cmd/init_test.go",
       "source_location": "L8",
       "weight": 1.0,
@@ -12033,7 +12306,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "cmd/use.go",
-      "source_location": "L44",
+      "source_location": "L45",
       "weight": 1.0,
       "_src": "cmd_use_go",
       "_tgt": "use_init",
@@ -12045,7 +12318,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "cmd/exec.go",
-      "source_location": "L67",
+      "source_location": "L68",
       "weight": 1.0,
       "_src": "cmd_exec_go",
       "_tgt": "exec_runexecprofile",
@@ -12057,7 +12330,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "cmd/exec.go",
-      "source_location": "L90",
+      "source_location": "L91",
       "weight": 1.0,
       "_src": "cmd_exec_go",
       "_tgt": "exec_runexecwithkubeconfigfile",
@@ -12069,7 +12342,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "cmd/exec.go",
-      "source_location": "L102",
+      "source_location": "L103",
       "weight": 1.0,
       "_src": "cmd_exec_go",
       "_tgt": "exec_runcommandwithkubeconfig",
@@ -12081,7 +12354,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "cmd/exec.go",
-      "source_location": "L115",
+      "source_location": "L116",
       "weight": 1.0,
       "_src": "cmd_exec_go",
       "_tgt": "exec_newexeccommandwithkubeconfig",
@@ -12093,7 +12366,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "cmd/exec.go",
-      "source_location": "L125",
+      "source_location": "L126",
       "weight": 1.0,
       "_src": "cmd_exec_go",
       "_tgt": "exec_execkubeconfigpath",
@@ -12105,7 +12378,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "cmd/exec.go",
-      "source_location": "L133",
+      "source_location": "L134",
       "weight": 1.0,
       "_src": "cmd_exec_go",
       "_tgt": "exec_appendenv",
@@ -12117,7 +12390,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "cmd/exec.go",
-      "source_location": "L87",
+      "source_location": "L88",
       "weight": 1.0,
       "_src": "exec_runexecprofile",
       "_tgt": "exec_runexecwithkubeconfigfile",
@@ -12129,7 +12402,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "cmd/exec.go",
-      "source_location": "L91",
+      "source_location": "L92",
       "weight": 1.0,
       "_src": "exec_runexecwithkubeconfigfile",
       "_tgt": "exec_runcommandwithkubeconfig",
@@ -12141,7 +12414,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "cmd/exec.go",
-      "source_location": "L103",
+      "source_location": "L104",
       "weight": 1.0,
       "_src": "exec_runcommandwithkubeconfig",
       "_tgt": "exec_newexeccommandwithkubeconfig",
@@ -12153,7 +12426,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "cmd/exec.go",
-      "source_location": "L120",
+      "source_location": "L121",
       "weight": 1.0,
       "_src": "exec_newexeccommandwithkubeconfig",
       "_tgt": "exec_appendenv",
@@ -12165,12 +12438,168 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "cmd/exec.go",
-      "source_location": "L120",
+      "source_location": "L121",
       "weight": 1.0,
       "_src": "exec_newexeccommandwithkubeconfig",
       "_tgt": "exec_execkubeconfigpath",
       "source": "exec_newexeccommandwithkubeconfig",
       "target": "exec_execkubeconfigpath",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "cmd/completion_test.go",
+      "source_location": "L15",
+      "weight": 1.0,
+      "_src": "cmd_completion_test_go",
+      "_tgt": "completion_test_testcompleteprofilenames",
+      "source": "cmd_completion_test_go",
+      "target": "completion_test_testcompleteprofilenames",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "cmd/completion_test.go",
+      "source_location": "L28",
+      "weight": 1.0,
+      "_src": "cmd_completion_test_go",
+      "_tgt": "completion_test_testcompleteprofilenamesfiltersprefix",
+      "source": "cmd_completion_test_go",
+      "target": "completion_test_testcompleteprofilenamesfiltersprefix",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "cmd/completion_test.go",
+      "source_location": "L41",
+      "weight": 1.0,
+      "_src": "cmd_completion_test_go",
+      "_tgt": "completion_test_testexeccommandcompletesprofilename",
+      "source": "cmd_completion_test_go",
+      "target": "completion_test_testexeccommandcompletesprofilename",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "cmd/completion_test.go",
+      "source_location": "L54",
+      "weight": 1.0,
+      "_src": "cmd_completion_test_go",
+      "_tgt": "completion_test_testprofilecompletionstopsafterprofilearg",
+      "source": "cmd_completion_test_go",
+      "target": "completion_test_testprofilecompletionstopsafterprofilearg",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "cmd/completion_test.go",
+      "source_location": "L66",
+      "weight": 1.0,
+      "_src": "cmd_completion_test_go",
+      "_tgt": "completion_test_testexeccompletionusesdefaultafterprofilearg",
+      "source": "cmd_completion_test_go",
+      "target": "completion_test_testexeccompletionusesdefaultafterprofilearg",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "cmd/completion_test.go",
+      "source_location": "L78",
+      "weight": 1.0,
+      "_src": "cmd_completion_test_go",
+      "_tgt": "completion_test_testrenamecompletesonlyoldprofilename",
+      "source": "cmd_completion_test_go",
+      "target": "completion_test_testrenamecompletesonlyoldprofilename",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "cmd/completion_test.go",
+      "source_location": "L99",
+      "weight": 1.0,
+      "_src": "cmd_completion_test_go",
+      "_tgt": "completion_test_setupcompletionprofiles",
+      "source": "cmd_completion_test_go",
+      "target": "completion_test_setupcompletionprofiles",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "cmd/completion_test.go",
+      "source_location": "L16",
+      "weight": 1.0,
+      "_src": "completion_test_testcompleteprofilenames",
+      "_tgt": "completion_test_setupcompletionprofiles",
+      "source": "completion_test_testcompleteprofilenames",
+      "target": "completion_test_setupcompletionprofiles",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "cmd/completion_test.go",
+      "source_location": "L29",
+      "weight": 1.0,
+      "_src": "completion_test_testcompleteprofilenamesfiltersprefix",
+      "_tgt": "completion_test_setupcompletionprofiles",
+      "source": "completion_test_testcompleteprofilenamesfiltersprefix",
+      "target": "completion_test_setupcompletionprofiles",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "cmd/completion_test.go",
+      "source_location": "L42",
+      "weight": 1.0,
+      "_src": "completion_test_testexeccommandcompletesprofilename",
+      "_tgt": "completion_test_setupcompletionprofiles",
+      "source": "completion_test_testexeccommandcompletesprofilename",
+      "target": "completion_test_setupcompletionprofiles",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "cmd/completion_test.go",
+      "source_location": "L55",
+      "weight": 1.0,
+      "_src": "completion_test_testprofilecompletionstopsafterprofilearg",
+      "_tgt": "completion_test_setupcompletionprofiles",
+      "source": "completion_test_testprofilecompletionstopsafterprofilearg",
+      "target": "completion_test_setupcompletionprofiles",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "cmd/completion_test.go",
+      "source_location": "L67",
+      "weight": 1.0,
+      "_src": "completion_test_testexeccompletionusesdefaultafterprofilearg",
+      "_tgt": "completion_test_setupcompletionprofiles",
+      "source": "completion_test_testexeccompletionusesdefaultafterprofilearg",
+      "target": "completion_test_setupcompletionprofiles",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "cmd/completion_test.go",
+      "source_location": "L79",
+      "weight": 1.0,
+      "_src": "completion_test_testrenamecompletesonlyoldprofilename",
+      "_tgt": "completion_test_setupcompletionprofiles",
+      "source": "completion_test_testrenamecompletesonlyoldprofilename",
+      "target": "completion_test_setupcompletionprofiles",
       "confidence_score": 1.0
     },
     {

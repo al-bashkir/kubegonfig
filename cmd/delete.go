@@ -15,10 +15,11 @@ import (
 var deleteForce bool
 
 var deleteCmd = &cobra.Command{
-	Use:     "delete <name>",
-	Aliases: []string{"rm"},
-	Short:   "Delete a kubeconfig profile",
-	Args:    cobra.ExactArgs(1),
+	Use:               "delete <name>",
+	Aliases:           []string{"rm"},
+	Short:             "Delete a kubeconfig profile",
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: completeProfileNames,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		name := args[0]
 

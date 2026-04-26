@@ -43,3 +43,11 @@ func TestSkipSetupForCompletionSubcommand(t *testing.T) {
 		t.Fatal("skipSetup() = false, want true for completion subcommand")
 	}
 }
+
+func TestSkipSetupForShellCompletionRequest(t *testing.T) {
+	cmd := &cobra.Command{Use: cobra.ShellCompRequestCmd}
+
+	if !skipSetup(cmd, []string{"exec", ""}) {
+		t.Fatal("skipSetup() = false, want true for shell completion request")
+	}
+}
