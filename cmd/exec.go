@@ -33,6 +33,7 @@ Example:
   kubegonfig exec staging -- helm list`,
 	Args:               cobra.MinimumNArgs(1),
 	DisableFlagParsing: true,
+	ValidArgsFunction:  completeExecProfileName,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if isHelpRequest(args) {
 			return cmd.Help()
