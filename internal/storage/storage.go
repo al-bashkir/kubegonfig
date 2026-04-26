@@ -41,19 +41,6 @@ func ConfigDir() (string, error) {
 	return filepath.Join(base, appName), nil
 }
 
-// StateDir returns the XDG_STATE_HOME/kubegonfig path.
-func StateDir() (string, error) {
-	base := os.Getenv("XDG_STATE_HOME")
-	if base == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", fmt.Errorf("resolve home dir: %w", err)
-		}
-		base = filepath.Join(home, ".local", "state")
-	}
-	return filepath.Join(base, appName), nil
-}
-
 // RuntimeDir returns a secure temporary directory for decrypted files.
 // Uses XDG_RUNTIME_DIR if available, otherwise falls back to a private
 // directory under the OS temp dir.
@@ -134,9 +121,21 @@ func AtomicWrite(path string, data []byte, perm os.FileMode) error {
 	if err := os.Rename(tmpPath, path); err != nil {
 		return fmt.Errorf("rename %s -> %s: %w", tmpPath, path, err)
 	}
+	if err := syncDir(dir); err != nil {
+		return fmt.Errorf("rename succeeded but sync directory %s: %w", dir, err)
+	}
 
 	success = true
 	return nil
+}
+
+func syncDir(dir string) error {
+	f, err := os.Open(dir)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	return f.Sync()
 }
 
 // ReadFile reads an entire file and returns its contents.
@@ -188,11 +187,11 @@ func (l *FileLock) Lock() error {
 	if err != nil {
 		return fmt.Errorf("open lock file %s: %w", l.path, err)
 	}
-	l.f = f
 	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
 		_ = f.Close()
 		return fmt.Errorf("flock %s: %w", l.path, err)
 	}
+	l.f = f
 	return nil
 }
 
@@ -201,9 +200,14 @@ func (l *FileLock) Unlock() error {
 	if l.f == nil {
 		return nil
 	}
-	if err := syscall.Flock(int(l.f.Fd()), syscall.LOCK_UN); err != nil {
-		_ = l.f.Close()
+	f := l.f
+	l.f = nil
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_UN); err != nil {
+		_ = f.Close()
 		return fmt.Errorf("funlock %s: %w", l.path, err)
 	}
-	return l.f.Close()
+	if err := f.Close(); err != nil {
+		return fmt.Errorf("close lock file %s: %w", l.path, err)
+	}
+	return nil
 }

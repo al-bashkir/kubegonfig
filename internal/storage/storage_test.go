@@ -46,18 +46,6 @@ func TestConfigDir_WithEnv(t *testing.T) {
 	}
 }
 
-func TestStateDir_WithEnv(t *testing.T) {
-	t.Setenv("XDG_STATE_HOME", "/custom/state")
-	dir, err := StateDir()
-	if err != nil {
-		t.Fatalf("StateDir() error: %v", err)
-	}
-	want := "/custom/state/kubegonfig"
-	if dir != want {
-		t.Errorf("StateDir() = %q, want %q", dir, want)
-	}
-}
-
 func TestRuntimeDir_WithEnv(t *testing.T) {
 	t.Setenv("XDG_RUNTIME_DIR", "/run/user/1000")
 	dir, err := RuntimeDir()
@@ -259,7 +247,7 @@ func TestFileLock(t *testing.T) {
 		t.Fatalf("Unlock() error: %v", err)
 	}
 
-	// Double unlock should be safe (f is nil after close).
-	// The current impl sets f to nil check — actually it doesn't reset f.
-	// But calling Unlock on closed file should still not panic.
+	if err := lock.Unlock(); err != nil {
+		t.Fatalf("Unlock() second call error: %v", err)
+	}
 }

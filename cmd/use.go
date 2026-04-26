@@ -6,11 +6,10 @@ package cmd
 import (
 	"fmt"
 
-	"kubegonfig/internal/shell"
-	"kubegonfig/internal/tmpfile"
-
 	"github.com/spf13/cobra"
 )
+
+var useShell string
 
 var useCmd = &cobra.Command{
 	Use:   "use <name>",
@@ -29,24 +28,19 @@ interpret the export command printed by kubegonfig.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		name := args[0]
 
-		data, err := mgr.Decrypt(name)
+		exportCmd, err := activateProfile(name, useShell)
 		if err != nil {
-			return err
-		}
-
-		path, err := tmpfile.Create(name, data)
-		if err != nil {
-			return err
-		}
-
-		if err := mgr.SetCurrent(name); err != nil {
 			return err
 		}
 
 		// Print the export statement to stdout (for eval).
-		fmt.Println(shell.FormatExport("KUBECONFIG", path))
+		fmt.Println(exportCmd)
 
 		info("Switched to profile %q", name)
 		return nil
 	},
+}
+
+func init() {
+	useCmd.Flags().StringVar(&useShell, "shell", "", "output format: posix (default), fish")
 }

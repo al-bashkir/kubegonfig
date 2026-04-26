@@ -6,6 +6,7 @@
 package profile
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -62,7 +63,7 @@ func (m *Manager) lockPath() string {
 }
 
 // withLock executes fn while holding an exclusive file lock.
-func (m *Manager) withLock(fn func() error) error {
+func (m *Manager) withLock(fn func() error) (err error) {
 	lock, err := storage.NewFileLock(m.lockPath())
 	if err != nil {
 		return fmt.Errorf("create lock: %w", err)
@@ -70,7 +71,12 @@ func (m *Manager) withLock(fn func() error) error {
 	if err := lock.Lock(); err != nil {
 		return fmt.Errorf("acquire lock: %w", err)
 	}
-	defer lock.Unlock()
+	defer func() {
+		if unlockErr := lock.Unlock(); unlockErr != nil {
+			err = errors.Join(err, fmt.Errorf("release lock: %w", unlockErr))
+		}
+	}()
+
 	return fn()
 }
 
@@ -114,7 +120,7 @@ func (m *Manager) List() ([]string, error) {
 	dir := m.profilesPath()
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("read profiles dir: %w", err)
@@ -233,7 +239,7 @@ func (m *Manager) setCurrent(name string) error {
 func (m *Manager) GetCurrent() (string, error) {
 	data, err := storage.ReadFile(m.currentPath())
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return "", nil
 		}
 		return "", err

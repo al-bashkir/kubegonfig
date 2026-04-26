@@ -6,9 +6,6 @@ package cmd
 import (
 	"fmt"
 
-	"kubegonfig/internal/shell"
-	"kubegonfig/internal/tmpfile"
-
 	"github.com/spf13/cobra"
 )
 
@@ -33,37 +30,11 @@ process model constraint. The eval pattern lets your shell interpret
 the export command that kubegonfig prints to stdout.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		name := args[0]
-
-		data, err := mgr.Decrypt(name)
+		exportCmd, err := activateProfile(args[0], envShell)
 		if err != nil {
 			return err
 		}
-
-		path, err := tmpfile.Create(name, data)
-		if err != nil {
-			return err
-		}
-
-		if err := mgr.SetCurrent(name); err != nil {
-			return err
-		}
-
-		shellStyle := envShell
-		if shellStyle == "" {
-			shellStyle = cfg.ShellStyle
-		}
-		if shellStyle == "" {
-			shellStyle = "posix"
-		}
-
-		switch shellStyle {
-		case "fish":
-			fmt.Println(shell.FormatFishSet("KUBECONFIG", path))
-		default:
-			fmt.Println(shell.FormatExport("KUBECONFIG", path))
-		}
-
+		fmt.Println(exportCmd)
 		return nil
 	},
 }
