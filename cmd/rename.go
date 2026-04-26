@@ -8,9 +8,10 @@ import (
 )
 
 var renameCmd = &cobra.Command{
-	Use:   "rename <old-name> <new-name>",
-	Short: "Rename a kubeconfig profile",
-	Args:  cobra.ExactArgs(2),
+	Use:               "rename <old-name> <new-name>",
+	Short:             "Rename a kubeconfig profile",
+	Args:              cobra.ExactArgs(2),
+	ValidArgsFunction: completeRenameOldProfile,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := mgr.Rename(args[0], args[1]); err != nil {
 			return err

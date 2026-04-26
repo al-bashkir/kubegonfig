@@ -16,7 +16,8 @@ var editCmd = &cobra.Command{
 	Short: "Edit an existing profile's kubeconfig",
 	Long: `Decrypt the profile, open it in your editor, then re-encrypt and
 save it. The temporary plaintext file is cleaned up immediately.`,
-	Args: cobra.ExactArgs(1),
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: completeProfileNames,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		name := args[0]
 

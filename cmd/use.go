@@ -24,7 +24,8 @@ Use with eval to set KUBECONFIG in the current shell:
 This is the correct Unix approach: a child process cannot modify
 the parent shell's environment. The eval pattern lets the shell
 interpret the export command printed by kubegonfig.`,
-	Args: cobra.ExactArgs(1),
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: completeProfileNames,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		name := args[0]
 
