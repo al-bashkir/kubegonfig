@@ -8,39 +8,68 @@ package crypto
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
+	"sync"
+)
+
+const (
+	maxGPGErrorLineLen = 240
+	maxGPGErrorLen     = 800
 )
 
 // gpgBinary caches the resolved path to the gpg executable.
-var gpgBinary string
+var (
+	gpgMu     sync.Mutex
+	gpgBinary string
+)
 
 // CheckGPG verifies that a usable gpg binary exists in PATH.
 func CheckGPG() error {
+	path, err := lookupGPG()
+	if err != nil {
+		return err
+	}
+	gpgMu.Lock()
+	gpgBinary = path
+	gpgMu.Unlock()
+	return nil
+}
+
+func lookupGPG() (string, error) {
 	for _, name := range []string{"gpg2", "gpg"} {
 		path, err := exec.LookPath(name)
 		if err == nil {
-			gpgBinary = path
-			return nil
+			return path, nil
 		}
 	}
-	return fmt.Errorf("gpg not found in PATH; install GnuPG to use kubegonfig")
+	return "", fmt.Errorf("gpg not found in PATH; install GnuPG to use kubegonfig")
 }
 
 // gpgPath returns the resolved gpg binary path, calling CheckGPG if needed.
 func gpgPath() (string, error) {
+	gpgMu.Lock()
+	defer gpgMu.Unlock()
+
 	if gpgBinary != "" {
-		return gpgBinary, nil
+		if _, err := os.Stat(gpgBinary); err == nil {
+			return gpgBinary, nil
+		}
+		gpgBinary = ""
 	}
-	if err := CheckGPG(); err != nil {
+	path, err := lookupGPG()
+	if err != nil {
 		return "", err
 	}
+	gpgBinary = path
 	return gpgBinary, nil
 }
 
 // Encrypt encrypts data for the given recipients using GPG.
 // At least one recipient must be specified.
 func Encrypt(data []byte, recipients []string) ([]byte, error) {
+	recipients = normalizeRecipients(recipients)
 	if len(recipients) == 0 {
 		return nil, fmt.Errorf("at least one GPG recipient is required")
 	}
@@ -73,6 +102,23 @@ func Encrypt(data []byte, recipients []string) ([]byte, error) {
 	}
 
 	return stdout.Bytes(), nil
+}
+
+func normalizeRecipients(recipients []string) []string {
+	normalized := make([]string, 0, len(recipients))
+	seen := make(map[string]struct{}, len(recipients))
+	for _, recipient := range recipients {
+		recipient = strings.TrimSpace(recipient)
+		if recipient == "" {
+			continue
+		}
+		if _, ok := seen[recipient]; ok {
+			continue
+		}
+		seen[recipient] = struct{}{}
+		normalized = append(normalized, recipient)
+	}
+	return normalized
 }
 
 // Decrypt decrypts GPG-encrypted data. Relies on gpg-agent for passphrase.
@@ -159,7 +205,8 @@ func ListSecretKeys() ([]GPGKey, error) {
 	return keys, nil
 }
 
-// sanitizeGPGError removes lines that could leak sensitive info from gpg stderr.
+// sanitizeGPGError keeps short actionable GPG diagnostics while dropping lines
+// that look like raw input, armored data, or unbounded wrapper output.
 func sanitizeGPGError(stderr string) string {
 	var safe []string
 	for _, line := range strings.Split(stderr, "\n") {
@@ -167,19 +214,73 @@ func sanitizeGPGError(stderr string) string {
 		if line == "" {
 			continue
 		}
-		// Keep diagnostics such as "No secret key"; drop lines that look like
-		// armored or raw data rather than GPG status text.
-		lower := strings.ToLower(line)
-		if strings.Contains(lower, "key data") ||
-			strings.Contains(lower, "literal data") ||
-			strings.Contains(line, "-----BEGIN PGP") ||
-			strings.Contains(line, "-----END PGP") {
-			continue
+		if isSafeGPGDiagnostic(line) {
+			safe = append(safe, line)
 		}
-		safe = append(safe, line)
 	}
 	if len(safe) == 0 {
 		return "unknown gpg error"
 	}
-	return strings.Join(safe, "; ")
+	msg := strings.Join(safe, "; ")
+	if len(msg) > maxGPGErrorLen {
+		return msg[:maxGPGErrorLen] + "... (truncated)"
+	}
+	return msg
+}
+
+func isSafeGPGDiagnostic(line string) bool {
+	if len(line) > maxGPGErrorLineLen {
+		return false
+	}
+	lower := strings.ToLower(line)
+	if looksSensitiveGPGLine(lower) || looksBase64Line(line) {
+		return false
+	}
+	if strings.HasPrefix(lower, "gpg:") {
+		return true
+	}
+	return lower == "secret key not available"
+}
+
+func looksSensitiveGPGLine(lower string) bool {
+	sensitive := []string{
+		"-----begin pgp",
+		"-----end pgp",
+		"key data",
+		"literal data",
+		"apiversion:",
+		"kind:",
+		"clusters:",
+		"contexts:",
+		"users:",
+		"current-context:",
+		"server:",
+		"certificate-authority-data:",
+		"client-certificate-data:",
+		"client-key-data:",
+		"token:",
+		"password:",
+	}
+	for _, marker := range sensitive {
+		if strings.Contains(lower, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+func looksBase64Line(line string) bool {
+	if len(line) < 80 {
+		return false
+	}
+	for _, r := range line {
+		if (r >= 'a' && r <= 'z') ||
+			(r >= 'A' && r <= 'Z') ||
+			(r >= '0' && r <= '9') ||
+			r == '+' || r == '/' || r == '=' {
+			continue
+		}
+		return false
+	}
+	return true
 }

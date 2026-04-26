@@ -17,6 +17,10 @@ and uses shell output so callers can opt in to environment changes.
    `done`).
 5. Never merge multiple large tasks into one task file.
 6. Record architectural decisions in the task file or WORKLOG.
+7. For broad audit or repository-improvement work, create `.plan/` before major
+   edits and keep the required planning files updated with purpose, findings,
+   intended changes, risks, validation steps, and status.
+8. Treat `.plan/` as local working state only; it must remain ignored by Git.
 
 ## Repository structure
 
@@ -44,13 +48,25 @@ and uses shell output so callers can opt in to environment changes.
 - Return actionable errors with context, but never include kubeconfig secrets or
   unsanitized GPG stderr in user-facing output.
 - Preserve actionable GPG diagnostics such as missing-key errors while filtering
-  stderr lines that look like raw or armored data.
+  stderr lines that look like raw, armored, YAML, base64-like, or unbounded data.
 - Use existing validation helpers instead of duplicating path, profile-name,
   shell-style, or kubeconfig checks.
 - Do not add compatibility layers or aliases unless there is a concrete shipped
   behavior, persisted data, external consumer, or explicit user requirement.
 - Run `gofmt` on edited Go files and keep `go.mod` / `go.sum` tidy when imports
   change.
+
+## Refactoring expectations
+
+- Preserve intended functionality and public CLI behavior while refactoring.
+- Prefer minimal, reviewable changes over broad rewrites.
+- Refactor only when it improves clarity, correctness, security, or removes
+  verified duplication.
+- Keep exported APIs only when they are used by production code, command wiring,
+  tests for meaningful behavior, documentation examples, or intentional internal
+  package boundaries.
+- Avoid adding compatibility layers or aliases without shipped behavior,
+  persisted data, external consumers, or an explicit requirement.
 
 ## Dead-code policy
 
@@ -60,6 +76,16 @@ and uses shell output so callers can opt in to environment changes.
   keeping speculative APIs.
 - If a helper appears unused but may represent intended public CLI behavior,
   document the uncertainty and ask before removing it.
+
+## Deprecated-code review
+
+- During audit work, check Go code, dependencies, CLI flags, config keys,
+  documentation, tests, scripts, manifests, and workflows for deprecated or
+  obsolete APIs and patterns.
+- Replace deprecated usage when behavior-preserving and low risk.
+- If replacement is not safe in the current pass, document the deprecated item,
+  impact, and recommended migration path in `.plan/`, the task file, and the
+  final report.
 
 ## Security invariants
 
@@ -79,13 +105,20 @@ and uses shell output so callers can opt in to environment changes.
   state reporting.
 - GPG recipients must be non-blank after trimming and deduplicated before GPG is
   invoked.
-- Shell output must be escaped for the target shell style.
+- Shell output must be escaped for the target shell style, and environment
+  variable names must be validated before shell assignment output is emitted.
 - Kubeconfig validation must reject contexts that reference undefined clusters or
-  users.
+  users, duplicate cluster/context/user names, and non-empty `current-context`
+  values that do not reference a defined context.
+- Config loading must read through verified non-symlink directories and reject
+  unknown YAML keys, invalid `shell_style` values, and non-empty `data_dir`
+  values that are blank after trimming or not absolute paths.
 - Atomic writes must use temp-file write, file fsync, rename, and parent directory
   fsync where supported by the platform.
 - File locks must be released on normal errors and during panic unwinding.
 - No secrets should be logged or printed to stdout/stderr.
+- Avoid printing input kubeconfig paths in success messages because paths may
+  contain sensitive cluster or customer names.
 
 ## Testing expectations
 
@@ -94,9 +127,13 @@ and uses shell output so callers can opt in to environment changes.
   verification; unit tests may write dummy encrypted profile files directly when
   testing storage/state behavior.
 - Cover security-sensitive regressions: profile-name validation, shell-style
-  validation, temp-file cleanup scope, file permissions, active-state updates,
-  lock lifecycle, and shell escaping.
+  validation, config path validation, temp-file cleanup scope, file permissions,
+  active-state updates, lock lifecycle, GPG stderr sanitization, env-key
+  validation, and shell escaping.
 - Preserve existing tests unless the tested code is verified dead and removed.
+- Use local host-based validation when helpful, including builds, linters,
+  shell syntax checks, Graphify updates, fake-GPG unit tests, and isolated
+  GPG-backed CLI smoke checks when available.
 
 ## Documentation expectations
 
@@ -128,3 +165,13 @@ file, WORKLOG, and final report.
 - `.agent/` is in `.gitignore` — never commit it.
 - Do not commit directly to `main`; use feature branches.
 - One commit per user request; never auto-push.
+
+## graphify
+
+This project has a graphify knowledge graph at graphify-out/.
+
+Rules:
+- Before answering architecture or codebase questions, read graphify-out/GRAPH_REPORT.md for god nodes and community structure
+- If graphify-out/wiki/index.md exists, navigate it instead of reading raw files
+- For cross-module "how does X relate to Y" questions, prefer `graphify query "<question>"`, `graphify path "<A>" "<B>"`, or `graphify explain "<concept>"` over grep — these traverse the graph's EXTRACTED + INFERRED edges instead of scanning files
+- After modifying code files in this session, run `graphify update .` to keep the graph current (AST-only, no API cost)

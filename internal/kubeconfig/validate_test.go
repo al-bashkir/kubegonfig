@@ -22,6 +22,7 @@ contexts:
     user: test-user
 users:
 - name: test-user
+current-context: test-context
 `
 
 func TestValidate_ValidConfig(t *testing.T) {
@@ -338,5 +339,102 @@ users:
 	}
 	if !strings.Contains(err.Error(), "user[0]: missing name") {
 		t.Errorf("expected 'user[0]: missing name' in error, got: %v", err)
+	}
+}
+
+func TestValidate_DuplicateClusterName(t *testing.T) {
+	err := Validate([]byte(`apiVersion: v1
+kind: Config
+clusters:
+- name: c
+  cluster:
+    server: https://localhost
+- name: c
+  cluster:
+    server: https://localhost
+contexts:
+- name: ctx
+  context:
+    cluster: c
+    user: u
+users:
+- name: u`))
+	if err == nil {
+		t.Fatal("Validate(duplicate cluster) error = nil")
+	}
+	if !strings.Contains(err.Error(), "duplicate name") {
+		t.Errorf("expected duplicate name error, got: %v", err)
+	}
+}
+
+func TestValidate_DuplicateUserName(t *testing.T) {
+	err := Validate([]byte(`apiVersion: v1
+kind: Config
+clusters:
+- name: c
+  cluster:
+    server: https://localhost
+contexts:
+- name: ctx
+  context:
+    cluster: c
+    user: u
+users:
+- name: u
+- name: u`))
+	if err == nil {
+		t.Fatal("Validate(duplicate user) error = nil")
+	}
+	if !strings.Contains(err.Error(), "duplicate name") {
+		t.Errorf("expected duplicate name error, got: %v", err)
+	}
+}
+
+func TestValidate_DuplicateContextName(t *testing.T) {
+	err := Validate([]byte(`apiVersion: v1
+kind: Config
+clusters:
+- name: c
+  cluster:
+    server: https://localhost
+contexts:
+- name: ctx
+  context:
+    cluster: c
+    user: u
+- name: ctx
+  context:
+    cluster: c
+    user: u
+users:
+- name: u`))
+	if err == nil {
+		t.Fatal("Validate(duplicate context) error = nil")
+	}
+	if !strings.Contains(err.Error(), "duplicate name") {
+		t.Errorf("expected duplicate name error, got: %v", err)
+	}
+}
+
+func TestValidate_CurrentContextUnknown(t *testing.T) {
+	err := Validate([]byte(`apiVersion: v1
+kind: Config
+clusters:
+- name: c
+  cluster:
+    server: https://localhost
+contexts:
+- name: ctx
+  context:
+    cluster: c
+    user: u
+current-context: missing
+users:
+- name: u`))
+	if err == nil {
+		t.Fatal("Validate(unknown current-context) error = nil")
+	}
+	if !strings.Contains(err.Error(), "current-context") {
+		t.Errorf("expected current-context error, got: %v", err)
 	}
 }

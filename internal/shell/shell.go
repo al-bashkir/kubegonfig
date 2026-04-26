@@ -20,6 +20,8 @@ const (
 // Max length 64 to prevent filesystem issues.
 var validNameRe = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$`)
 
+var validEnvKeyRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
 // ValidateName checks that a profile name is safe for use as a filename
 // and in shell commands. Rejects path traversal, shell metacharacters,
 // and empty/blank names.
@@ -46,15 +48,18 @@ func EscapePosix(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
-// FormatExport returns a POSIX-compatible export statement.
-// Output: export KEY='value'
-func FormatExport(key, value string) string {
+func validateEnvKey(key string) error {
+	if !validEnvKeyRe.MatchString(key) {
+		return fmt.Errorf("invalid environment variable name %q", key)
+	}
+	return nil
+}
+
+func formatExport(key, value string) string {
 	return fmt.Sprintf("export %s=%s", key, EscapePosix(value))
 }
 
-// FormatFishSet returns a fish shell set statement.
-// Output: set -gx KEY 'value'
-func FormatFishSet(key, value string) string {
+func formatFishSet(key, value string) string {
 	return fmt.Sprintf("set -gx %s %s", key, EscapePosix(value))
 }
 
@@ -77,10 +82,13 @@ func FormatSet(style, key, value string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if err := validateEnvKey(key); err != nil {
+		return "", err
+	}
 	switch style {
 	case StyleFish:
-		return FormatFishSet(key, value), nil
+		return formatFishSet(key, value), nil
 	default:
-		return FormatExport(key, value), nil
+		return formatExport(key, value), nil
 	}
 }

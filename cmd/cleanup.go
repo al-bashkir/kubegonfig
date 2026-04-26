@@ -17,8 +17,12 @@ Only valid profile-name-shaped *.yaml files in kubegonfig's runtime
 directory are removed.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		count, err := tmpfile.CleanupStale()
-		if err != nil {
+		var count int
+		if err := mgr.WithLock(func() error {
+			var err error
+			count, err = tmpfile.CleanupStale()
+			return err
+		}); err != nil {
 			return err
 		}
 

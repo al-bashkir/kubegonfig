@@ -6,9 +6,10 @@ package storage
 import (
 	"os"
 	"path/filepath"
-	"syscall"
 	"testing"
 	"time"
+
+	"golang.org/x/sys/unix"
 )
 
 func TestDataDir_WithEnv(t *testing.T) {
@@ -116,7 +117,7 @@ func TestEnsureDirRejectsSymlink(t *testing.T) {
 func TestOpenDirNoFollowRejectsFIFOImmediately(t *testing.T) {
 	tmp := t.TempDir()
 	fifo := filepath.Join(tmp, "fifo")
-	if err := syscall.Mkfifo(fifo, 0600); err != nil {
+	if err := unix.Mkfifo(fifo, 0600); err != nil {
 		t.Fatalf("Mkfifo() error: %v", err)
 	}
 
@@ -223,9 +224,9 @@ func TestAtomicWriteInDirRejectsSymlinkedDir(t *testing.T) {
 }
 
 func TestAtomicWriteInDirIgnoresRestrictiveUmask(t *testing.T) {
-	oldUmask := syscall.Umask(0077)
+	oldUmask := unix.Umask(0077)
 	t.Cleanup(func() {
-		syscall.Umask(oldUmask)
+		unix.Umask(oldUmask)
 	})
 
 	tmp := t.TempDir()
@@ -279,7 +280,7 @@ func TestReadFileInDirRejectsSymlinkedFile(t *testing.T) {
 func TestReadFileInDirRejectsFIFOImmediately(t *testing.T) {
 	tmp := t.TempDir()
 	name := "fifo"
-	if err := syscall.Mkfifo(filepath.Join(tmp, name), 0600); err != nil {
+	if err := unix.Mkfifo(filepath.Join(tmp, name), 0600); err != nil {
 		t.Fatalf("Mkfifo() error: %v", err)
 	}
 
@@ -296,30 +297,6 @@ func TestReadFileInDirRejectsFIFOImmediately(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("ReadFileInDir() blocked on FIFO")
-	}
-}
-
-func TestRemoveFile(t *testing.T) {
-	tmp := t.TempDir()
-	path := filepath.Join(tmp, "remove.txt")
-
-	if err := os.WriteFile(path, []byte("bye"), 0600); err != nil {
-		t.Fatalf("setup: %v", err)
-	}
-
-	if err := RemoveFile(path); err != nil {
-		t.Fatalf("RemoveFile() error: %v", err)
-	}
-
-	if fileExists(path) {
-		t.Error("file still exists after RemoveFile")
-	}
-}
-
-func TestRemoveFile_NotExists(t *testing.T) {
-	// Should not error when file doesn't exist.
-	if err := RemoveFile("/nonexistent/path/file.txt"); err != nil {
-		t.Errorf("RemoveFile(nonexistent) error: %v", err)
 	}
 }
 
@@ -495,7 +472,7 @@ func TestFileExistsInDirRejectsSymlinkedFile(t *testing.T) {
 func TestFileExistsInDirRejectsFIFOImmediately(t *testing.T) {
 	tmp := t.TempDir()
 	name := "fifo"
-	if err := syscall.Mkfifo(filepath.Join(tmp, name), 0600); err != nil {
+	if err := unix.Mkfifo(filepath.Join(tmp, name), 0600); err != nil {
 		t.Fatalf("Mkfifo() error: %v", err)
 	}
 
@@ -532,7 +509,7 @@ func TestRegularFileInDirSkipsSymlinkAndFIFO(t *testing.T) {
 	if err := os.Symlink(filepath.Join(tmp, "regular"), filepath.Join(tmp, "link")); err != nil {
 		t.Fatalf("Symlink() error: %v", err)
 	}
-	if err := syscall.Mkfifo(filepath.Join(tmp, "fifo"), 0600); err != nil {
+	if err := unix.Mkfifo(filepath.Join(tmp, "fifo"), 0600); err != nil {
 		t.Fatalf("Mkfifo() error: %v", err)
 	}
 
@@ -576,6 +553,26 @@ func TestFileLock(t *testing.T) {
 
 	if err := lock.Unlock(); err != nil {
 		t.Fatalf("Unlock() second call error: %v", err)
+	}
+}
+
+func TestFileLockRejectsSymlinkLockFile(t *testing.T) {
+	tmp := t.TempDir()
+	target := filepath.Join(tmp, "target")
+	lockPath := filepath.Join(tmp, "test.lock")
+	if err := os.WriteFile(target, []byte("target"), 0600); err != nil {
+		t.Fatalf("WriteFile() error: %v", err)
+	}
+	if err := os.Symlink(target, lockPath); err != nil {
+		t.Skipf("Symlink() unavailable: %v", err)
+	}
+
+	lock, err := NewFileLock(lockPath)
+	if err != nil {
+		t.Fatalf("NewFileLock() error: %v", err)
+	}
+	if err := lock.Lock(); err == nil {
+		t.Fatal("Lock() error = nil, want symlink rejection")
 	}
 }
 

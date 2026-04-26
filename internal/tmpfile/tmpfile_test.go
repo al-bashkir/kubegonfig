@@ -134,10 +134,12 @@ func TestOpenUnlinkedRejectsSymlinkedRuntimeDir(t *testing.T) {
 
 func TestRemove(t *testing.T) {
 	tmp := t.TempDir()
-	path := filepath.Join(tmp, "remove-me.yaml")
+	t.Setenv("XDG_RUNTIME_DIR", tmp)
+	resetTracked(t)
 
-	if err := os.WriteFile(path, []byte("data"), 0600); err != nil {
-		t.Fatalf("setup: %v", err)
+	path, err := Create("remove-me", []byte("data"))
+	if err != nil {
+		t.Fatalf("Create() error: %v", err)
 	}
 
 	if err := Remove(path); err != nil {
@@ -146,6 +148,22 @@ func TestRemove(t *testing.T) {
 
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Error("file should not exist after Remove")
+	}
+}
+
+func TestRemoveRejectsPathOutsideRuntimeDir(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("XDG_RUNTIME_DIR", tmp)
+	outside := filepath.Join(t.TempDir(), "remove-me.yaml")
+	if err := os.WriteFile(outside, []byte("data"), 0600); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+
+	if err := Remove(outside); err == nil {
+		t.Fatal("Remove() error = nil, want outside-runtime rejection")
+	}
+	if _, err := os.Stat(outside); err != nil {
+		t.Fatalf("outside file changed: %v", err)
 	}
 }
 
@@ -306,6 +324,35 @@ func TestCreate_MultipleTracked(t *testing.T) {
 
 	if count != 0 {
 		t.Errorf("tracked count after cleanup = %d, want 0", count)
+	}
+}
+
+func TestCleanupAllKeepsTrackedPathAfterRemoveFailure(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("XDG_RUNTIME_DIR", tmp)
+	resetTracked(t)
+
+	path, err := Create("retry-me", []byte("data"))
+	if err != nil {
+		t.Fatalf("Create() error: %v", err)
+	}
+	runtimeDir := filepath.Dir(path)
+	if err := os.Remove(path); err != nil {
+		t.Fatalf("remove temp file: %v", err)
+	}
+	if err := os.Remove(runtimeDir); err != nil {
+		t.Fatalf("remove runtime dir: %v", err)
+	}
+	if err := os.WriteFile(runtimeDir, []byte("not a directory"), 0600); err != nil {
+		t.Fatalf("replace runtime dir with file: %v", err)
+	}
+
+	CleanupAll()
+
+	trackedMu.Lock()
+	defer trackedMu.Unlock()
+	if len(tracked) != 1 || tracked[0] != path {
+		t.Fatalf("tracked = %v, want retained failed cleanup path %q", tracked, path)
 	}
 }
 

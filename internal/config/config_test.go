@@ -66,6 +66,111 @@ func TestLoad_InvalidYAML(t *testing.T) {
 	}
 }
 
+func TestLoadRejectsUnknownFields(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmp)
+
+	dir := filepath.Join(tmp, "kubegonfig")
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte("gpg_recipent: typo@example.com\n"), 0600); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+
+	if _, err := Load(); err == nil {
+		t.Fatal("Load() error = nil, want unknown field error")
+	}
+}
+
+func TestLoadRejectsInvalidShellStyle(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmp)
+
+	dir := filepath.Join(tmp, "kubegonfig")
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+	data := []byte("shell_style: powershell\n")
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), data, 0600); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+
+	if _, err := Load(); err == nil {
+		t.Fatal("Load() error = nil, want invalid shell_style error")
+	}
+}
+
+func TestLoadRejectsSymlinkedConfigFile(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmp)
+
+	dir := filepath.Join(tmp, "kubegonfig")
+	target := filepath.Join(tmp, "target.yaml")
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatalf("setup dir: %v", err)
+	}
+	if err := os.WriteFile(target, []byte("gpg_recipient: attacker@example.com\n"), 0600); err != nil {
+		t.Fatalf("setup target: %v", err)
+	}
+	if err := os.Symlink(target, filepath.Join(dir, "config.yaml")); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	if _, err := Load(); err == nil {
+		t.Fatal("Load() error = nil, want symlinked config file error")
+	}
+}
+
+func TestLoadRejectsSymlinkedConfigDir(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmp)
+
+	target := filepath.Join(tmp, "target")
+	if err := os.MkdirAll(target, 0700); err != nil {
+		t.Fatalf("setup target: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(target, "config.yaml"), []byte("gpg_recipient: attacker@example.com\n"), 0600); err != nil {
+		t.Fatalf("setup config: %v", err)
+	}
+	if err := os.Symlink(target, filepath.Join(tmp, "kubegonfig")); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	if _, err := Load(); err == nil {
+		t.Fatal("Load() error = nil, want symlinked config dir error")
+	}
+}
+
+func TestLoadRejectsInvalidDataDir(t *testing.T) {
+	tests := []struct {
+		name string
+		data string
+	}{
+		{name: "relative", data: "data_dir: profiles\n"},
+		{name: "blank", data: "data_dir: '   '\n"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmp := t.TempDir()
+			t.Setenv("XDG_CONFIG_HOME", tmp)
+
+			dir := filepath.Join(tmp, "kubegonfig")
+			if err := os.MkdirAll(dir, 0700); err != nil {
+				t.Fatalf("setup: %v", err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(tt.data), 0600); err != nil {
+				t.Fatalf("setup: %v", err)
+			}
+
+			if _, err := Load(); err == nil {
+				t.Fatal("Load() error = nil, want invalid data_dir error")
+			}
+		})
+	}
+}
+
 func TestSaveAndLoad(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", tmp)
@@ -169,10 +274,19 @@ func TestValidate(t *testing.T) {
 	if err := (&Config{GPGRecipients: []string{"user@example.com", ""}}).Validate(); err == nil {
 		t.Error("Validate() should fail with blank extra recipient")
 	}
+	if err := (&Config{GPGRecipient: "user@example.com", ShellStyle: "powershell"}).Validate(); err == nil {
+		t.Error("Validate() should fail with invalid shell_style")
+	}
+	if err := (&Config{GPGRecipient: "user@example.com", DataDir: "relative"}).Validate(); err == nil {
+		t.Error("Validate() should fail with relative data_dir")
+	}
+	if err := (&Config{GPGRecipient: "user@example.com", DataDir: "   "}).Validate(); err == nil {
+		t.Error("Validate() should fail with blank data_dir")
+	}
 }
 
 func TestResolveDataDir_Override(t *testing.T) {
-	cfg := &Config{DataDir: "/custom/data"}
+	cfg := &Config{DataDir: " /custom/data "}
 	got, err := cfg.ResolveDataDir()
 	if err != nil {
 		t.Fatalf("ResolveDataDir() error: %v", err)

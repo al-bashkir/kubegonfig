@@ -4,7 +4,6 @@
 package cmd
 
 import (
-	"bytes"
 	"fmt"
 
 	"kubegonfig/internal/editor"
@@ -21,27 +20,19 @@ save it. The temporary plaintext file is cleaned up immediately.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		name := args[0]
 
-		// Decrypt current content.
-		original, err := mgr.Decrypt(name)
+		changed, err := mgr.Edit(name, func(original []byte) ([]byte, error) {
+			edited, err := editor.Edit(original)
+			if err != nil {
+				return nil, fmt.Errorf("editor: %w", err)
+			}
+			return edited, nil
+		})
 		if err != nil {
 			return err
 		}
-
-		// Open in editor.
-		edited, err := editor.Edit(original)
-		if err != nil {
-			return fmt.Errorf("editor: %w", err)
-		}
-
-		// Check if content changed.
-		if bytes.Equal(original, edited) {
+		if !changed {
 			info("No changes made")
 			return nil
-		}
-
-		// Re-encrypt and save.
-		if err := mgr.Update(name, edited); err != nil {
-			return err
 		}
 
 		info("Profile %q updated", name)
