@@ -272,6 +272,52 @@ users:
 	}
 }
 
+func TestValidate_ContextUnknownCluster(t *testing.T) {
+	data := `apiVersion: v1
+kind: Config
+clusters:
+- name: c
+  cluster:
+    server: https://localhost
+contexts:
+- name: ctx
+  context:
+    cluster: missing
+    user: u
+users:
+- name: u`
+	err := Validate([]byte(data))
+	if err == nil {
+		t.Error("Validate(context unknown cluster ref) should return error")
+	}
+	if !strings.Contains(err.Error(), "unknown cluster reference") {
+		t.Errorf("expected 'unknown cluster reference' in error, got: %v", err)
+	}
+}
+
+func TestValidate_ContextUnknownUser(t *testing.T) {
+	data := `apiVersion: v1
+kind: Config
+clusters:
+- name: c
+  cluster:
+    server: https://localhost
+contexts:
+- name: ctx
+  context:
+    cluster: c
+    user: missing
+users:
+- name: u`
+	err := Validate([]byte(data))
+	if err == nil {
+		t.Error("Validate(context unknown user ref) should return error")
+	}
+	if !strings.Contains(err.Error(), "unknown user reference") {
+		t.Errorf("expected 'unknown user reference' in error, got: %v", err)
+	}
+}
+
 func TestValidate_UserMissingName(t *testing.T) {
 	data := `apiVersion: v1
 kind: Config

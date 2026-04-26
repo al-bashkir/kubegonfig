@@ -72,7 +72,9 @@ func TestOpenUnlinked(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenUnlinked() error: %v", err)
 	}
-	defer f.Close()
+	defer func() {
+		_ = f.Close()
+	}()
 
 	got, err := io.ReadAll(f)
 	if err != nil {
@@ -102,6 +104,31 @@ func TestOpenUnlinked_InvalidName(t *testing.T) {
 	_, err := OpenUnlinked("../bad", []byte("data"))
 	if err == nil {
 		t.Fatal("OpenUnlinked with invalid profile name should fail")
+	}
+}
+
+func TestOpenUnlinkedRejectsSymlinkedRuntimeDir(t *testing.T) {
+	tmp := t.TempDir()
+	target := filepath.Join(tmp, "target")
+	runtimeDir := filepath.Join(tmp, "kubegonfig")
+	t.Setenv("XDG_RUNTIME_DIR", tmp)
+
+	if err := os.MkdirAll(target, 0700); err != nil {
+		t.Fatalf("create symlink target: %v", err)
+	}
+	if err := os.Symlink(target, runtimeDir); err != nil {
+		t.Skipf("runtime dir symlink unavailable: %v", err)
+	}
+
+	if _, err := OpenUnlinked("exec-profile", []byte("data")); err == nil {
+		t.Fatal("OpenUnlinked() error = nil, want symlinked runtime dir error")
+	}
+	entries, err := os.ReadDir(target)
+	if err != nil {
+		t.Fatalf("ReadDir(%q) error: %v", target, err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("symlink target contains %d entries, want 0", len(entries))
 	}
 }
 
@@ -189,6 +216,30 @@ func TestCleanupStale_NonexistentDir(t *testing.T) {
 	}
 	if count != 0 {
 		t.Errorf("CleanupStale(nonexistent) count = %d, want 0", count)
+	}
+}
+
+func TestCleanupStaleRejectsSymlinkedRuntimeDir(t *testing.T) {
+	tmp := t.TempDir()
+	target := filepath.Join(tmp, "target")
+	runtimeDir := filepath.Join(tmp, "kubegonfig")
+	t.Setenv("XDG_RUNTIME_DIR", tmp)
+
+	if err := os.MkdirAll(target, 0700); err != nil {
+		t.Fatalf("create symlink target: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(target, "old.yaml"), []byte("stale"), 0600); err != nil {
+		t.Fatalf("write stale target file: %v", err)
+	}
+	if err := os.Symlink(target, runtimeDir); err != nil {
+		t.Skipf("runtime dir symlink unavailable: %v", err)
+	}
+
+	if _, err := CleanupStale(); err == nil {
+		t.Fatal("CleanupStale() error = nil, want symlinked runtime dir error")
+	}
+	if _, err := os.Stat(filepath.Join(target, "old.yaml")); err != nil {
+		t.Fatalf("stale file in symlink target was removed or changed: %v", err)
 	}
 }
 

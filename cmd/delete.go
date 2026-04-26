@@ -25,12 +25,17 @@ var deleteCmd = &cobra.Command{
 		if !deleteForce {
 			fmt.Fprintf(os.Stderr, "Delete profile %q? [y/N] ", name)
 			scanner := bufio.NewScanner(os.Stdin)
-			if scanner.Scan() {
-				answer := strings.TrimSpace(strings.ToLower(scanner.Text()))
-				if answer != "y" && answer != "yes" {
-					info("Aborted")
-					return nil
+			if !scanner.Scan() {
+				if err := scanner.Err(); err != nil {
+					return fmt.Errorf("read confirmation: %w", err)
 				}
+				info("Aborted")
+				return nil
+			}
+			answer := strings.TrimSpace(strings.ToLower(scanner.Text()))
+			if answer != "y" && answer != "yes" {
+				info("Aborted")
+				return nil
 			}
 		}
 

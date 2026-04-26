@@ -75,6 +75,7 @@ func Validate(data []byte) error {
 	}
 
 	// Validate cluster entries have minimum required fields.
+	clusterNames := make(map[string]struct{}, len(kc.Clusters))
 	for i, c := range kc.Clusters {
 		if c.Name == "" {
 			return fmt.Errorf("cluster[%d]: missing name", i)
@@ -82,9 +83,19 @@ func Validate(data []byte) error {
 		if c.Cluster.Server == "" {
 			return fmt.Errorf("cluster[%d] %q: missing server", i, c.Name)
 		}
+		clusterNames[c.Name] = struct{}{}
 	}
 
-	// Validate context entries reference cluster and user.
+	// Validate user entries have names before contexts reference them.
+	userNames := make(map[string]struct{}, len(kc.Users))
+	for i, u := range kc.Users {
+		if u.Name == "" {
+			return fmt.Errorf("user[%d]: missing name", i)
+		}
+		userNames[u.Name] = struct{}{}
+	}
+
+	// Validate context entries reference defined clusters and users.
 	for i, ctx := range kc.Contexts {
 		if ctx.Name == "" {
 			return fmt.Errorf("context[%d]: missing name", i)
@@ -92,15 +103,14 @@ func Validate(data []byte) error {
 		if ctx.Context.Cluster == "" {
 			return fmt.Errorf("context[%d] %q: missing cluster reference", i, ctx.Name)
 		}
+		if _, ok := clusterNames[ctx.Context.Cluster]; !ok {
+			return fmt.Errorf("context[%d] %q: unknown cluster reference %q", i, ctx.Name, ctx.Context.Cluster)
+		}
 		if ctx.Context.User == "" {
 			return fmt.Errorf("context[%d] %q: missing user reference", i, ctx.Name)
 		}
-	}
-
-	// Validate user entries have names.
-	for i, u := range kc.Users {
-		if u.Name == "" {
-			return fmt.Errorf("user[%d]: missing name", i)
+		if _, ok := userNames[ctx.Context.User]; !ok {
+			return fmt.Errorf("context[%d] %q: unknown user reference %q", i, ctx.Name, ctx.Context.User)
 		}
 	}
 

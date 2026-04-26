@@ -8,6 +8,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"kubegonfig/internal/storage"
 
@@ -75,14 +76,22 @@ func (c *Config) Path() string {
 // The primary recipient is always included first.
 func (c *Config) Recipients() []string {
 	var r []string
-	if c.GPGRecipient != "" {
-		r = append(r, c.GPGRecipient)
-	}
-	for _, extra := range c.GPGRecipients {
-		// Deduplicate against primary.
-		if extra != c.GPGRecipient {
-			r = append(r, extra)
+	seen := make(map[string]struct{})
+	add := func(recipient string) {
+		recipient = strings.TrimSpace(recipient)
+		if recipient == "" {
+			return
 		}
+		if _, ok := seen[recipient]; ok {
+			return
+		}
+		seen[recipient] = struct{}{}
+		r = append(r, recipient)
+	}
+
+	add(c.GPGRecipient)
+	for _, extra := range c.GPGRecipients {
+		add(extra)
 	}
 	return r
 }
@@ -97,6 +106,14 @@ func (c *Config) ResolveDataDir() (string, error) {
 
 // Validate checks that the config has minimum required fields.
 func (c *Config) Validate() error {
+	if c.GPGRecipient != "" && strings.TrimSpace(c.GPGRecipient) == "" {
+		return fmt.Errorf("gpg_recipient must not be blank")
+	}
+	for _, recipient := range c.GPGRecipients {
+		if strings.TrimSpace(recipient) == "" {
+			return fmt.Errorf("gpg_recipients must not contain blank recipients")
+		}
+	}
 	if len(c.Recipients()) == 0 {
 		return fmt.Errorf("no GPG recipient configured; run: kubegonfig init")
 	}

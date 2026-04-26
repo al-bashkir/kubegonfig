@@ -6,6 +6,7 @@ package cmd
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -39,8 +40,8 @@ func TestRunExecWithKubeconfigFileSetsKubeconfigAndClosesFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadFile(%q) error = %v", outPath, err)
 	}
-	if got := string(data); got != execKubeconfigPath {
-		t.Fatalf("child KUBECONFIG = %q, want %q", got, execKubeconfigPath)
+	if got := string(data); got != execKubeconfigPath() {
+		t.Fatalf("child KUBECONFIG = %q, want %q", got, execKubeconfigPath())
 	}
 
 	content, err := os.ReadFile(contentPath)
@@ -121,6 +122,33 @@ func TestRunExecWithKubeconfigFileClosesAfterStartError(t *testing.T) {
 		t.Fatalf("exit code = %d, want 0", exitCode)
 	}
 	assertRuntimeDirEmpty(t)
+}
+
+func TestAppendEnvReplacesEmptyValue(t *testing.T) {
+	env := []string{"KUBECONFIG=", "OTHER=value"}
+
+	got := appendEnv(env, "KUBECONFIG", "/tmp/config")
+	want := []string{"KUBECONFIG=/tmp/config", "OTHER=value"}
+	if len(got) != len(want) {
+		t.Fatalf("appendEnv() len = %d, want %d: %v", len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("appendEnv()[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+func TestExecKubeconfigPathUsesInheritedFileDescriptor(t *testing.T) {
+	want := "/dev/fd/3"
+	if runtime.GOOS == "linux" {
+		want = "/proc/self/fd/3"
+	}
+
+	got := execKubeconfigPath()
+	if got != want {
+		t.Fatalf("execKubeconfigPath() = %q, want %q", got, want)
+	}
 }
 
 func openTestExecKubeconfig(t *testing.T, name string, data []byte) *os.File {

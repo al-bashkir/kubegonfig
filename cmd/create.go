@@ -19,7 +19,7 @@ var createCmd = &cobra.Command{
 	Long: `Create a new encrypted kubeconfig profile.
 
 If --from is specified, the kubeconfig is read from the given file.
-Otherwise, your $EDITOR is opened to paste or write the kubeconfig content.`,
+Otherwise, your $VISUAL or $EDITOR is opened to paste or write the kubeconfig content.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		name := args[0]
@@ -28,15 +28,22 @@ Otherwise, your $EDITOR is opened to paste or write the kubeconfig content.`,
 			return mgr.Import(name, createFrom)
 		}
 
-		// Open editor for interactive creation.
-		template := []byte(`# Paste your kubeconfig below and save.
-# This file will be validated and encrypted with GPG.
+		template := []byte(`# Replace these placeholder values with your kubeconfig and save.
+# The saved file is validated and encrypted with GPG.
 apiVersion: v1
 kind: Config
-clusters: []
-contexts: []
-users: []
-current-context: ""
+clusters:
+- name: cluster
+  cluster:
+    server: https://127.0.0.1:6443
+contexts:
+- name: context
+  context:
+    cluster: cluster
+    user: user
+current-context: context
+users:
+- name: user
 `)
 		data, err := editor.Edit(template)
 		if err != nil {

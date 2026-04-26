@@ -12,16 +12,16 @@ import (
 	"strings"
 )
 
-// fallbackEditors is the ordered list of editors to try when $EDITOR is unset.
+// fallbackEditors is the ordered list of editors to try when no editor is configured.
 var fallbackEditors = []string{"vim", "nvim", "nano"}
 
 // ResolveEditor determines which editor to use.
-// Priority: $EDITOR > $VISUAL > fallback chain.
+// Priority: $VISUAL > $EDITOR > fallback chain.
 func ResolveEditor() (string, error) {
-	if e := os.Getenv("EDITOR"); e != "" {
+	if e := os.Getenv("VISUAL"); e != "" {
 		return e, nil
 	}
-	if e := os.Getenv("VISUAL"); e != "" {
+	if e := os.Getenv("EDITOR"); e != "" {
 		return e, nil
 	}
 	for _, name := range fallbackEditors {
@@ -29,7 +29,7 @@ func ResolveEditor() (string, error) {
 			return name, nil
 		}
 	}
-	return "", fmt.Errorf("no editor found: set $EDITOR or install vim/nvim/nano")
+	return "", fmt.Errorf("no editor found: set $VISUAL or $EDITOR, or install vim/nvim/nano")
 }
 
 // Edit opens the user's editor with initialContent pre-filled in a secure
@@ -46,7 +46,9 @@ func Edit(initialContent []byte) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create temp dir: %w", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+	}()
 
 	if err := os.Chmod(tmpDir, 0700); err != nil {
 		return nil, fmt.Errorf("chmod temp dir: %w", err)
@@ -57,8 +59,10 @@ func Edit(initialContent []byte) ([]byte, error) {
 		return nil, fmt.Errorf("write temp file: %w", err)
 	}
 
-	// Parse editor command (handles cases like "code --wait").
-	parts := strings.Fields(editorCmd)
+	parts, err := splitCommandLine(editorCmd)
+	if err != nil {
+		return nil, fmt.Errorf("parse editor command: %w", err)
+	}
 	if len(parts) == 0 {
 		return nil, fmt.Errorf("empty editor command")
 	}
@@ -79,4 +83,51 @@ func Edit(initialContent []byte) ([]byte, error) {
 	}
 
 	return content, nil
+}
+
+func splitCommandLine(s string) ([]string, error) {
+	var parts []string
+	var b strings.Builder
+	inSingle := false
+	inDouble := false
+	escaped := false
+	hasPart := false
+
+	for _, r := range s {
+		switch {
+		case escaped:
+			b.WriteRune(r)
+			escaped = false
+			hasPart = true
+		case r == '\\' && !inSingle:
+			escaped = true
+			hasPart = true
+		case r == '\'' && !inDouble:
+			inSingle = !inSingle
+			hasPart = true
+		case r == '"' && !inSingle:
+			inDouble = !inDouble
+			hasPart = true
+		case (r == ' ' || r == '\t' || r == '\n') && !inSingle && !inDouble:
+			if hasPart {
+				parts = append(parts, b.String())
+				b.Reset()
+				hasPart = false
+			}
+		default:
+			b.WriteRune(r)
+			hasPart = true
+		}
+	}
+
+	if escaped {
+		return nil, fmt.Errorf("unfinished escape")
+	}
+	if inSingle || inDouble {
+		return nil, fmt.Errorf("unterminated quote")
+	}
+	if hasPart {
+		parts = append(parts, b.String())
+	}
+	return parts, nil
 }

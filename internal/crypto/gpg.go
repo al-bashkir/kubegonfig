@@ -167,10 +167,13 @@ func sanitizeGPGError(stderr string) string {
 		if line == "" {
 			continue
 		}
-		// Keep gpg status/error lines, drop anything that looks like data.
+		// Keep diagnostics such as "No secret key"; drop lines that look like
+		// armored or raw data rather than GPG status text.
 		lower := strings.ToLower(line)
-		if strings.Contains(lower, "secret") ||
-			strings.Contains(lower, "key") && strings.Contains(lower, "data") {
+		if strings.Contains(lower, "key data") ||
+			strings.Contains(lower, "literal data") ||
+			strings.Contains(line, "-----BEGIN PGP") ||
+			strings.Contains(line, "-----END PGP") {
 			continue
 		}
 		safe = append(safe, line)

@@ -20,12 +20,15 @@ var listCmd = &cobra.Command{
 			return err
 		}
 
+		current, err := mgr.GetCurrent()
+		if err != nil {
+			return fmt.Errorf("read current profile: %w", err)
+		}
+
 		if len(names) == 0 {
 			info("No profiles found")
 			return nil
 		}
-
-		current, _ := mgr.GetCurrent()
 
 		for _, name := range names {
 			marker := "  "

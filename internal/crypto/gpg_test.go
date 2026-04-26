@@ -20,9 +20,14 @@ func TestSanitizeGPGError(t *testing.T) {
 			want:   "gpg: encryption failed: No public key",
 		},
 		{
-			name:   "filters secret lines",
+			name:   "keeps secret key diagnostics",
 			stderr: "gpg: error\nsecret key not available\ngpg: failed\n",
-			want:   "gpg: error; gpg: failed",
+			want:   "gpg: error; secret key not available; gpg: failed",
+		},
+		{
+			name:   "keeps no secret key diagnostics",
+			stderr: "gpg: public key decryption failed: No secret key\ngpg: decryption failed: No secret key\n",
+			want:   "gpg: public key decryption failed: No secret key; gpg: decryption failed: No secret key",
 		},
 		{
 			name:   "filters key data lines",
@@ -36,7 +41,7 @@ func TestSanitizeGPGError(t *testing.T) {
 		},
 		{
 			name:   "only filtered lines",
-			stderr: "secret key info\nkey data block\n",
+			stderr: "key data block\nliteral data packet\n-----BEGIN PGP MESSAGE-----\n",
 			want:   "unknown gpg error",
 		},
 		{

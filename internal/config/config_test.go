@@ -6,6 +6,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 )
 
@@ -99,24 +100,34 @@ func TestRecipients(t *testing.T) {
 		wantAll []string
 	}{
 		{
-			name: "primary only",
-			cfg:  Config{GPGRecipient: "a@b.com"},
-			want: 1,
+			name:    "primary only",
+			cfg:     Config{GPGRecipient: "a@b.com"},
+			want:    1,
+			wantAll: []string{"a@b.com"},
 		},
 		{
-			name: "primary + extras",
-			cfg:  Config{GPGRecipient: "a@b.com", GPGRecipients: []string{"c@d.com"}},
-			want: 2,
+			name:    "primary + extras",
+			cfg:     Config{GPGRecipient: "a@b.com", GPGRecipients: []string{"c@d.com"}},
+			want:    2,
+			wantAll: []string{"a@b.com", "c@d.com"},
 		},
 		{
-			name: "dedup primary from extras",
-			cfg:  Config{GPGRecipient: "a@b.com", GPGRecipients: []string{"a@b.com", "c@d.com"}},
-			want: 2,
+			name:    "dedup primary from extras",
+			cfg:     Config{GPGRecipient: "a@b.com", GPGRecipients: []string{"a@b.com", "c@d.com"}},
+			want:    2,
+			wantAll: []string{"a@b.com", "c@d.com"},
 		},
 		{
-			name: "no recipient",
-			cfg:  Config{},
-			want: 0,
+			name:    "trims and dedups extras",
+			cfg:     Config{GPGRecipient: " a@b.com ", GPGRecipients: []string{"c@d.com", " c@d.com ", ""}},
+			want:    2,
+			wantAll: []string{"a@b.com", "c@d.com"},
+		},
+		{
+			name:    "no recipient",
+			cfg:     Config{},
+			want:    0,
+			wantAll: nil,
 		},
 		{
 			name:    "extras only (no primary)",
@@ -131,6 +142,9 @@ func TestRecipients(t *testing.T) {
 			got := tt.cfg.Recipients()
 			if len(got) != tt.want {
 				t.Errorf("Recipients() len = %d, want %d (got: %v)", len(got), tt.want, got)
+			}
+			if !reflect.DeepEqual(got, tt.wantAll) {
+				t.Errorf("Recipients() = %v, want %v", got, tt.wantAll)
 			}
 		})
 	}
@@ -147,6 +161,13 @@ func TestValidate(t *testing.T) {
 	cfg.GPGRecipient = "user@example.com"
 	if err := cfg.Validate(); err != nil {
 		t.Errorf("Validate() should pass, got error: %v", err)
+	}
+
+	if err := (&Config{GPGRecipient: "   "}).Validate(); err == nil {
+		t.Error("Validate() should fail with blank primary recipient")
+	}
+	if err := (&Config{GPGRecipients: []string{"user@example.com", ""}}).Validate(); err == nil {
+		t.Error("Validate() should fail with blank extra recipient")
 	}
 }
 

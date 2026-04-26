@@ -67,38 +67,10 @@ func OpenUnlinked(name string, data []byte) (*os.File, error) {
 	if err != nil {
 		return nil, fmt.Errorf("resolve runtime dir: %w", err)
 	}
-	if err := storage.EnsureDir(dir, 0700); err != nil {
-		return nil, fmt.Errorf("create runtime dir: %w", err)
-	}
-
-	tmp, err := os.CreateTemp(dir, name+"-*.yaml")
+	tmp, err := storage.OpenUnlinkedTempFileInDir(dir, name+"-", ".yaml", data, 0600)
 	if err != nil {
-		return nil, fmt.Errorf("create temp kubeconfig: %w", err)
+		return nil, fmt.Errorf("create unlinked temp kubeconfig: %w", err)
 	}
-	tmpPath := tmp.Name()
-
-	success := false
-	defer func() {
-		if !success {
-			_ = tmp.Close()
-			_ = os.Remove(tmpPath)
-		}
-	}()
-
-	if err := tmp.Chmod(0600); err != nil {
-		return nil, fmt.Errorf("chmod temp kubeconfig: %w", err)
-	}
-	if _, err := tmp.Write(data); err != nil {
-		return nil, fmt.Errorf("write temp kubeconfig: %w", err)
-	}
-	if _, err := tmp.Seek(0, 0); err != nil {
-		return nil, fmt.Errorf("rewind temp kubeconfig: %w", err)
-	}
-	if err := os.Remove(tmpPath); err != nil {
-		return nil, fmt.Errorf("unlink temp kubeconfig: %w", err)
-	}
-
-	success = true
 	return tmp, nil
 }
 
@@ -132,33 +104,25 @@ func CleanupStale() (int, error) {
 		return 0, fmt.Errorf("resolve runtime dir: %w", err)
 	}
 
-	info, err := os.Stat(dir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return 0, nil
-		}
-		return 0, fmt.Errorf("stat runtime dir: %w", err)
-	}
-	if !info.IsDir() {
-		return 0, fmt.Errorf("runtime path %s is not a directory", dir)
-	}
-	if err := storage.EnsureDir(dir, 0700); err != nil {
-		return 0, fmt.Errorf("verify runtime dir: %w", err)
-	}
-
-	entries, err := os.ReadDir(dir)
+	entries, err := storage.ReadDirInDir(dir)
 	if err != nil {
 		return 0, fmt.Errorf("read runtime dir: %w", err)
 	}
 
 	count := 0
 	for _, e := range entries {
-		if e.IsDir() || !isKubeconfigTempName(e.Name()) {
+		if !isKubeconfigTempName(e.Name()) {
 			continue
 		}
-		path := filepath.Join(dir, e.Name())
-		if err := os.Remove(path); err != nil {
-			return count, fmt.Errorf("remove %s: %w", path, err)
+		regular, err := storage.RegularFileInDir(dir, e.Name())
+		if err != nil {
+			return count, fmt.Errorf("check %s: %w", filepath.Join(dir, e.Name()), err)
+		}
+		if !regular {
+			continue
+		}
+		if err := storage.RemoveFileInDir(dir, e.Name()); err != nil {
+			return count, fmt.Errorf("remove %s: %w", filepath.Join(dir, e.Name()), err)
 		}
 		count++
 	}

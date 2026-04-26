@@ -22,6 +22,19 @@ jobs:
 
       - run: go test ./... -count=1
 
+      - run: go test -race ./... -count=1
+
+      - name: Install shell syntax dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zsh fish
+
+      - name: Check shell wrapper syntax
+        run: |
+          bash -n shell/kubegonfig.bash
+          zsh -n shell/kubegonfig.zsh
+          fish -n shell/kubegonfig.fish
+
   build:
     needs: test
     runs-on: ubuntu-latest

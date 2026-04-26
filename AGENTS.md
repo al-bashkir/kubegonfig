@@ -27,7 +27,7 @@ and uses shell output so callers can opt in to environment changes.
 | `internal/config` | App configuration, config file paths, recipient handling |
 | `internal/crypto` | GPG binary discovery, encryption/decryption, key listing |
 | `internal/editor` | `$VISUAL` / `$EDITOR` resolution and edit-in-temp-file flow |
-| `internal/kubeconfig` | Kubeconfig YAML validation |
+| `internal/kubeconfig` | Kubeconfig YAML validation, including context reference checks |
 | `internal/profile` | Profile CRUD, encrypted storage coordination, active profile state |
 | `internal/shell` | Profile-name validation, shell escaping, env output formatting |
 | `internal/storage` | XDG paths, directory safety checks, atomic writes, file locking |
@@ -43,6 +43,8 @@ and uses shell output so callers can opt in to environment changes.
 - Keep command packages thin when reusable behavior belongs in `internal/*`.
 - Return actionable errors with context, but never include kubeconfig secrets or
   unsanitized GPG stderr in user-facing output.
+- Preserve actionable GPG diagnostics such as missing-key errors while filtering
+  stderr lines that look like raw or armored data.
 - Use existing validation helpers instead of duplicating path, profile-name,
   shell-style, or kubeconfig checks.
 - Do not add compatibility layers or aliases unless there is a concrete shipped
@@ -62,16 +64,24 @@ and uses shell output so callers can opt in to environment changes.
 ## Security invariants
 
 - Kubeconfig profile contents must never be stored permanently in plaintext.
-- Decrypted runtime files must live in an app-owned `0700` directory and be
-  written with `0600` permissions.
+- Decrypted runtime files must live in an app-owned non-symlink `0700` directory
+  and be written with `0600` permissions.
 - `exec`-scoped kubeconfigs should be unlinked before the child command continues
-  and passed through an inherited file descriptor where supported.
+  and passed through an inherited file descriptor where supported (`/proc/self/fd/3`
+  on Linux and `/dev/fd/3` on other Unix-like release targets).
+- `exec` temp-file creation and unlinking should use descriptor-relative
+  operations against the same verified runtime directory handle.
 - `env` / `use` activation files may remain in the runtime directory so the
   caller's shell can keep using them; `cleanup` is responsible for stale files.
-- Runtime cleanup must only remove kubegonfig-owned kubeconfig temp file names
-  from the app runtime directory.
-- Profile names must be validated before filesystem use or shell output.
+- Runtime cleanup must only remove valid profile-name-shaped `*.yaml` activation
+  files from the app runtime directory.
+- Profile names must be validated before filesystem use, shell output, or active
+  state reporting.
+- GPG recipients must be non-blank after trimming and deduplicated before GPG is
+  invoked.
 - Shell output must be escaped for the target shell style.
+- Kubeconfig validation must reject contexts that reference undefined clusters or
+  users.
 - Atomic writes must use temp-file write, file fsync, rename, and parent directory
   fsync where supported by the platform.
 - File locks must be released on normal errors and during panic unwinding.

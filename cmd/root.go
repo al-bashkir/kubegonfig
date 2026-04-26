@@ -7,6 +7,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"kubegonfig/internal/config"
 	"kubegonfig/internal/crypto"
@@ -40,9 +41,7 @@ Or add a helper function to your shell rc file:
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		// Skip setup for commands that don't need it.
-		switch cmd.Name() {
-		case "init", "help", "completion", "version":
+		if skipSetup(cmd, args) {
 			return nil
 		}
 
@@ -69,6 +68,33 @@ Or add a helper function to your shell rc file:
 
 		return nil
 	},
+}
+
+func skipSetup(cmd *cobra.Command, args []string) bool {
+	if cmd.DisableFlagParsing && isHelpRequest(args) {
+		return true
+	}
+	if strings.HasPrefix(cmd.CommandPath(), "kubegonfig completion") {
+		return true
+	}
+	switch cmd.Name() {
+	case "init", "help", "completion", "version":
+		return true
+	default:
+		return false
+	}
+}
+
+func isHelpRequest(args []string) bool {
+	for _, arg := range args {
+		if arg == "--" {
+			return false
+		}
+		if arg == "-h" || arg == "--help" {
+			return true
+		}
+	}
+	return false
 }
 
 func init() {
