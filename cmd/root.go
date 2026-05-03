@@ -113,6 +113,7 @@ func init() {
 		execCmd,
 		editCmd,
 		cleanupCmd,
+		unlockCmd,
 	)
 }
 

@@ -101,6 +101,7 @@ kubegonfig env my-cluster --shell fish | source
 | `current` | Print the active profile name |
 | `rename <old> <new>` | Rename a profile |
 | `delete <name>` (`rm`) | Delete a profile (`--force` to skip prompt) |
+| `unlock <name>...` | Decrypt one or more profiles to the runtime dir without activating any |
 | `cleanup` | Remove stale temp files from runtime dir |
 
 Global options include `--quiet` (`-q`) to suppress informational stderr messages and the standard Cobra `--help`/`--version` output.

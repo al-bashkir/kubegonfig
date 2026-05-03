@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -420,6 +421,105 @@ func TestDeleteRestoresCurrentWhenProfileRemovalFails(t *testing.T) {
 	}
 	if current != "prod" {
 		t.Errorf("current after failed profile removal = %q, want prod", current)
+	}
+}
+
+func TestManager_Unlock(t *testing.T) {
+	installFakeGPG(t)
+	m := newTestManager(t)
+	writePlaintextProfile(t, m, "prod")
+
+	wantPath := filepath.Join(t.TempDir(), "prod.yaml")
+	var gotData []byte
+	gotPath, err := m.Unlock("prod", func(data []byte) (string, error) {
+		gotData = append(gotData[:0], data...)
+		return wantPath, nil
+	})
+	if err != nil {
+		t.Fatalf("Unlock() error = %v", err)
+	}
+	if gotPath != wantPath {
+		t.Errorf("Unlock() path = %q, want %q", gotPath, wantPath)
+	}
+	if string(gotData) != string(validKubeconfig()) {
+		t.Errorf("create callback received %q, want decrypted profile bytes", gotData)
+	}
+	if _, err := os.Stat(currentPathForTest(m)); !os.IsNotExist(err) {
+		t.Errorf("Unlock() must not write current state file: stat err = %v", err)
+	}
+}
+
+func TestManager_Unlock_InvalidName(t *testing.T) {
+	m := newTestManager(t)
+	called := false
+	_, err := m.Unlock("../bad", func([]byte) (string, error) {
+		called = true
+		return "", nil
+	})
+	if err == nil {
+		t.Fatal("Unlock() error = nil, want invalid name error")
+	}
+	if called {
+		t.Error("create callback was invoked despite invalid name")
+	}
+}
+
+func TestManager_Unlock_NilCallback(t *testing.T) {
+	m := newTestManager(t)
+	if _, err := m.Unlock("prod", nil); err == nil {
+		t.Fatal("Unlock() error = nil, want nil callback error")
+	}
+}
+
+func TestManager_Unlock_MissingProfile(t *testing.T) {
+	installFakeGPG(t)
+	m := newTestManager(t)
+
+	_, err := m.Unlock("missing", func([]byte) (string, error) {
+		return "", nil
+	})
+	if err == nil {
+		t.Fatal("Unlock() error = nil, want missing profile error")
+	}
+	if !strings.Contains(err.Error(), `profile "missing" not found`) {
+		t.Fatalf("Unlock() error = %v, want %q substring", err, `profile "missing" not found`)
+	}
+}
+
+func TestUnlockHoldsLockDuringCreateCallback(t *testing.T) {
+	installFakeGPG(t)
+	m := newTestManager(t)
+	writePlaintextProfile(t, m, "prod")
+
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	createdPath := filepath.Join(t.TempDir(), "prod.yaml")
+	unlockDone := make(chan error, 1)
+	go func() {
+		path, err := m.Unlock("prod", func(data []byte) (string, error) {
+			close(entered)
+			<-release
+			return createdPath, nil
+		})
+		if err == nil && path == "" {
+			err = fmt.Errorf("Unlock() path is empty")
+		}
+		unlockDone <- err
+	}()
+
+	waitForEntry(t, entered, unlockDone, "Unlock callback")
+	lockDone := make(chan error, 1)
+	go func() {
+		lockDone <- m.WithLock(func() error { return nil })
+	}()
+
+	assertStillBlocked(t, lockDone, "WithLock while unlock callback is active")
+	close(release)
+	if err := waitForResult(t, unlockDone, "Unlock"); err != nil {
+		t.Fatalf("Unlock() error = %v", err)
+	}
+	if err := waitForResult(t, lockDone, "WithLock after unlock callback exits"); err != nil {
+		t.Fatalf("WithLock() error = %v", err)
 	}
 }
 
