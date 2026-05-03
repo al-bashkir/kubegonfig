@@ -265,6 +265,28 @@ func (m *Manager) Activate(name string, create func([]byte) (string, error), cle
 	return path, err
 }
 
+// Unlock decrypts a profile and writes its activation file via create,
+// while holding the profile lock. Unlike Activate, it does not record
+// the profile as current.
+func (m *Manager) Unlock(name string, create func([]byte) (string, error)) (path string, err error) {
+	if err := shell.ValidateName(name); err != nil {
+		return "", err
+	}
+	if create == nil {
+		return "", fmt.Errorf("activation callback must not be nil")
+	}
+
+	err = m.WithLock(func() error {
+		data, err := m.decryptProfile(name)
+		if err != nil {
+			return err
+		}
+		path, err = create(data)
+		return err
+	})
+	return path, err
+}
+
 // Delete removes a profile. If it was active, clears the current state.
 func (m *Manager) Delete(name string) error {
 	if err := shell.ValidateName(name); err != nil {
