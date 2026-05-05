@@ -433,6 +433,14 @@ func (m *Manager) profileExists(name string) (bool, error) {
 	return storage.FileExistsInDir(m.profilesPath(), profileFileName(name))
 }
 
+// Exists reports whether a profile with the given name is stored locally.
+func (m *Manager) Exists(name string) (bool, error) {
+	if err := shell.ValidateName(name); err != nil {
+		return false, err
+	}
+	return m.profileExists(name)
+}
+
 func (m *Manager) setCurrent(name string) error {
 	return m.writeCurrent(name)
 }

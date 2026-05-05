@@ -732,3 +732,34 @@ func profilePathForTest(m *Manager, name string) string {
 func currentPathForTest(m *Manager) string {
 	return filepath.Join(m.statePath(), currentFile)
 }
+
+func TestManager_Exists_True(t *testing.T) {
+	m := newTestManager(t)
+	writeProfile(t, m, "alpha")
+
+	got, err := m.Exists("alpha")
+	if err != nil {
+		t.Fatalf("Exists() error: %v", err)
+	}
+	if !got {
+		t.Error("Exists(\"alpha\") = false, want true")
+	}
+}
+
+func TestManager_Exists_False(t *testing.T) {
+	m := newTestManager(t)
+	got, err := m.Exists("missing")
+	if err != nil {
+		t.Fatalf("Exists() error: %v", err)
+	}
+	if got {
+		t.Error("Exists(\"missing\") = true, want false")
+	}
+}
+
+func TestManager_Exists_InvalidName(t *testing.T) {
+	m := newTestManager(t)
+	if _, err := m.Exists("../bad"); err == nil {
+		t.Fatal("Exists() error = nil, want invalid name error")
+	}
+}
