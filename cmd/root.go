@@ -115,6 +115,7 @@ func init() {
 		cleanupCmd,
 		unlockCmd,
 		exportCmd,
+		restoreCmd,
 	)
 }
 
