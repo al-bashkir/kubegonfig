@@ -684,6 +684,84 @@ func TestRestore_RejectsPathTraversal(t *testing.T) {
 	}
 }
 
+func TestRestore_MergeConfigUnionsRecipients(t *testing.T) {
+	srcCfg := &config.Config{DataDir: t.TempDir(), GPGRecipient: "src@example.com"}
+	srcCfg.GPGRecipients = []string{"shared@example.com"}
+	srcCfg.SetPathForTest(filepath.Join(t.TempDir(), "config.yaml"))
+	if err := srcCfg.Save(); err != nil {
+		t.Fatalf("save src config: %v", err)
+	}
+	srcMgr, _ := profile.NewManager(srcCfg)
+	if err := srcMgr.WriteEncrypted("alpha", []byte("a")); err != nil {
+		t.Fatalf("WriteEncrypted(): %v", err)
+	}
+	var buf bytes.Buffer
+	if err := Export(srcMgr, srcCfg, ExportOptions{
+		Names: []string{"alpha"}, IncludeConfig: true,
+		KubegonfigVersion: "0.2.0", Out: &buf,
+	}); err != nil {
+		t.Fatalf("Export() error: %v", err)
+	}
+
+	dstCfg := &config.Config{DataDir: t.TempDir(), GPGRecipient: "dst@example.com"}
+	dstCfg.GPGRecipients = []string{"local-only@example.com"}
+	dstCfg.SetPathForTest(filepath.Join(t.TempDir(), "config.yaml"))
+	if err := dstCfg.Save(); err != nil {
+		t.Fatalf("save dst config: %v", err)
+	}
+	dstMgr, _ := profile.NewManager(dstCfg)
+
+	if _, err := Restore(dstMgr, dstCfg, RestoreOptions{
+		In: bytes.NewReader(buf.Bytes()), MergeConfig: true,
+	}); err != nil {
+		t.Fatalf("Restore() error: %v", err)
+	}
+
+	if dstCfg.GPGRecipient != "dst@example.com" {
+		t.Errorf("primary recipient overwritten: got %q", dstCfg.GPGRecipient)
+	}
+	got := append([]string(nil), dstCfg.GPGRecipients...)
+	sort.Strings(got)
+	want := []string{"local-only@example.com", "shared@example.com"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("GPGRecipients = %v, want %v", got, want)
+	}
+}
+
+func TestRestore_ProfilesOnlySkipsConfigEvenWithMergeConfig(t *testing.T) {
+	srcCfg := &config.Config{DataDir: t.TempDir(), GPGRecipient: "src@example.com"}
+	srcCfg.GPGRecipients = []string{"shared@example.com"}
+	srcCfg.SetPathForTest(filepath.Join(t.TempDir(), "config.yaml"))
+	_ = srcCfg.Save()
+	srcMgr, _ := profile.NewManager(srcCfg)
+	if err := srcMgr.WriteEncrypted("alpha", []byte("a")); err != nil {
+		t.Fatalf("WriteEncrypted(): %v", err)
+	}
+	var buf bytes.Buffer
+	_ = Export(srcMgr, srcCfg, ExportOptions{
+		Names: []string{"alpha"}, IncludeConfig: true,
+		KubegonfigVersion: "0.2.0", Out: &buf,
+	})
+
+	dstCfg := &config.Config{DataDir: t.TempDir(), GPGRecipient: "dst@example.com"}
+	dstCfg.SetPathForTest(filepath.Join(t.TempDir(), "config.yaml"))
+	_ = dstCfg.Save()
+	dstMgr, _ := profile.NewManager(dstCfg)
+
+	plan, err := Restore(dstMgr, dstCfg, RestoreOptions{
+		In: bytes.NewReader(buf.Bytes()), MergeConfig: true, ProfilesOnly: true,
+	})
+	if err != nil {
+		t.Fatalf("Restore() error: %v", err)
+	}
+	if plan.ConfigAction != "skip-profiles-only" {
+		t.Errorf("plan.ConfigAction = %q, want skip-profiles-only", plan.ConfigAction)
+	}
+	if len(dstCfg.GPGRecipients) != 0 {
+		t.Errorf("GPGRecipients merged despite ProfilesOnly: %v", dstCfg.GPGRecipients)
+	}
+}
+
 func TestRestore_PlaintextArchiveReEncryptsWithLocalRecipients(t *testing.T) {
 	installFakeGPGForBundle(t)
 
