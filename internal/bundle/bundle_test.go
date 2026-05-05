@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -464,4 +465,238 @@ func keysOf(m map[string][]byte) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+func TestRestore_RoundTripEncrypted(t *testing.T) {
+	src := newSeededManager(t, map[string][]byte{
+		"alpha": []byte("alpha-cipher"),
+		"beta":  []byte("beta-cipher"),
+	})
+	srcCfg := &config.Config{GPGRecipient: "test@example.com"}
+
+	var buf bytes.Buffer
+	if err := Export(src, srcCfg, ExportOptions{
+		Names:             []string{"alpha", "beta"},
+		KubegonfigVersion: "0.2.0", Out: &buf,
+	}); err != nil {
+		t.Fatalf("Export() error: %v", err)
+	}
+
+	dst := newSeededManager(t, nil)
+	dstCfg := &config.Config{GPGRecipient: "test@example.com"}
+
+	plan, err := Restore(dst, dstCfg, RestoreOptions{In: bytes.NewReader(buf.Bytes())})
+	if err != nil {
+		t.Fatalf("Restore() error: %v", err)
+	}
+	if got, want := len(plan.ToCreate), 2; got != want {
+		t.Errorf("plan.ToCreate len = %d, want %d", got, want)
+	}
+
+	for _, name := range []string{"alpha", "beta"} {
+		got, err := dst.ReadEncrypted(name)
+		if err != nil {
+			t.Fatalf("ReadEncrypted(%q): %v", name, err)
+		}
+		if string(got) != name+"-cipher" {
+			t.Errorf("restored %q = %q, want %q", name, got, name+"-cipher")
+		}
+	}
+}
+
+func TestRestore_DryRunDoesNotWrite(t *testing.T) {
+	src := newSeededManager(t, map[string][]byte{"alpha": []byte("a")})
+	srcCfg := &config.Config{GPGRecipient: "test@example.com"}
+	var buf bytes.Buffer
+	if err := Export(src, srcCfg, ExportOptions{
+		Names: []string{"alpha"}, KubegonfigVersion: "0.2.0", Out: &buf,
+	}); err != nil {
+		t.Fatalf("Export() error: %v", err)
+	}
+
+	dst := newSeededManager(t, nil)
+	plan, err := Restore(dst, &config.Config{GPGRecipient: "test@example.com"}, RestoreOptions{
+		In: bytes.NewReader(buf.Bytes()), DryRun: true,
+	})
+	if err != nil {
+		t.Fatalf("Restore() error: %v", err)
+	}
+	if len(plan.ToCreate) != 1 || plan.ToCreate[0] != "alpha" {
+		t.Errorf("plan.ToCreate = %v, want [alpha]", plan.ToCreate)
+	}
+
+	exists, err := dst.Exists("alpha")
+	if err != nil {
+		t.Fatalf("Exists(): %v", err)
+	}
+	if exists {
+		t.Error("alpha was written despite DryRun=true")
+	}
+}
+
+func TestRestore_CollisionWithoutFlagsFails(t *testing.T) {
+	src := newSeededManager(t, map[string][]byte{
+		"alpha": []byte("a-new"),
+		"beta":  []byte("b-new"),
+	})
+	srcCfg := &config.Config{GPGRecipient: "test@example.com"}
+	var buf bytes.Buffer
+	if err := Export(src, srcCfg, ExportOptions{
+		Names: []string{"alpha", "beta"}, KubegonfigVersion: "0.2.0", Out: &buf,
+	}); err != nil {
+		t.Fatalf("Export() error: %v", err)
+	}
+
+	dst := newSeededManager(t, map[string][]byte{
+		"alpha": []byte("a-old"),
+		"beta":  []byte("b-old"),
+	})
+
+	_, err := Restore(dst, &config.Config{GPGRecipient: "test@example.com"}, RestoreOptions{
+		In: bytes.NewReader(buf.Bytes()),
+	})
+	if err == nil {
+		t.Fatal("Restore() error = nil, want collision error")
+	}
+	if !strings.Contains(err.Error(), "alpha") || !strings.Contains(err.Error(), "beta") {
+		t.Errorf("error %q must list ALL colliding names", err)
+	}
+
+	got, _ := dst.ReadEncrypted("alpha")
+	if string(got) != "a-old" {
+		t.Errorf("alpha overwritten despite collision error: got %q", got)
+	}
+}
+
+func TestRestore_ForceOverwrites(t *testing.T) {
+	src := newSeededManager(t, map[string][]byte{"alpha": []byte("a-new")})
+	srcCfg := &config.Config{GPGRecipient: "test@example.com"}
+	var buf bytes.Buffer
+	if err := Export(src, srcCfg, ExportOptions{
+		Names: []string{"alpha"}, KubegonfigVersion: "0.2.0", Out: &buf,
+	}); err != nil {
+		t.Fatalf("Export() error: %v", err)
+	}
+
+	dst := newSeededManager(t, map[string][]byte{"alpha": []byte("a-old")})
+	plan, err := Restore(dst, &config.Config{GPGRecipient: "test@example.com"}, RestoreOptions{
+		In: bytes.NewReader(buf.Bytes()), Force: true,
+	})
+	if err != nil {
+		t.Fatalf("Restore() error: %v", err)
+	}
+	if len(plan.ToOverwrite) != 1 || plan.ToOverwrite[0] != "alpha" {
+		t.Errorf("plan.ToOverwrite = %v, want [alpha]", plan.ToOverwrite)
+	}
+
+	got, _ := dst.ReadEncrypted("alpha")
+	if string(got) != "a-new" {
+		t.Errorf("after Force restore, alpha = %q, want %q", got, "a-new")
+	}
+}
+
+func TestRestore_SkipExistingKeepsLocal(t *testing.T) {
+	src := newSeededManager(t, map[string][]byte{
+		"alpha": []byte("a-new"), "beta": []byte("b-new"),
+	})
+	srcCfg := &config.Config{GPGRecipient: "test@example.com"}
+	var buf bytes.Buffer
+	if err := Export(src, srcCfg, ExportOptions{
+		Names: []string{"alpha", "beta"}, KubegonfigVersion: "0.2.0", Out: &buf,
+	}); err != nil {
+		t.Fatalf("Export() error: %v", err)
+	}
+
+	dst := newSeededManager(t, map[string][]byte{"alpha": []byte("a-old")})
+	plan, err := Restore(dst, &config.Config{GPGRecipient: "test@example.com"}, RestoreOptions{
+		In: bytes.NewReader(buf.Bytes()), SkipExisting: true,
+	})
+	if err != nil {
+		t.Fatalf("Restore() error: %v", err)
+	}
+	if !reflect.DeepEqual(plan.ToSkip, []string{"alpha"}) {
+		t.Errorf("plan.ToSkip = %v, want [alpha]", plan.ToSkip)
+	}
+	if !reflect.DeepEqual(plan.ToCreate, []string{"beta"}) {
+		t.Errorf("plan.ToCreate = %v, want [beta]", plan.ToCreate)
+	}
+
+	got, _ := dst.ReadEncrypted("alpha")
+	if string(got) != "a-old" {
+		t.Errorf("alpha kept-local check failed; got %q", got)
+	}
+	got, _ = dst.ReadEncrypted("beta")
+	if string(got) != "b-new" {
+		t.Errorf("beta restore check failed; got %q", got)
+	}
+}
+
+func TestRestore_ForceAndSkipExistingMutuallyExclusive(t *testing.T) {
+	dst := newSeededManager(t, nil)
+	_, err := Restore(dst, &config.Config{GPGRecipient: "test@example.com"}, RestoreOptions{
+		In: bytes.NewReader(nil), Force: true, SkipExisting: true,
+	})
+	if err == nil {
+		t.Fatal("Restore() error = nil, want mutual-exclusion error")
+	}
+}
+
+func TestRestore_RejectsManifestNotFirst(t *testing.T) {
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+	body := []byte("a")
+	_ = tw.WriteHeader(&tar.Header{Name: ProfilesDir + "alpha" + EncryptedExt, Mode: 0600, Size: int64(len(body))})
+	_, _ = tw.Write(body)
+	manifestBody, _ := MarshalManifest(&Manifest{
+		SchemaVersion: 1, CreatedAt: time.Now().UTC(), KubegonfigVersion: "0.2.0",
+		Encrypted: true, ProfileCount: 1,
+		Profiles: []ManifestProfile{{Name: "alpha", File: ProfilesDir + "alpha" + EncryptedExt}},
+	})
+	_ = tw.WriteHeader(&tar.Header{Name: ManifestName, Mode: 0600, Size: int64(len(manifestBody))})
+	_, _ = tw.Write(manifestBody)
+	_ = tw.Close()
+
+	dst := newSeededManager(t, nil)
+	_, err := Restore(dst, &config.Config{GPGRecipient: "test@example.com"}, RestoreOptions{In: bytes.NewReader(buf.Bytes())})
+	if err == nil {
+		t.Fatal("Restore() error = nil, want manifest-not-first error")
+	}
+}
+
+func TestRestore_RejectsPathTraversal(t *testing.T) {
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+	manifestBody, _ := MarshalManifest(&Manifest{
+		SchemaVersion: 1, CreatedAt: time.Now().UTC(), KubegonfigVersion: "0.2.0",
+		Encrypted: true, ProfileCount: 0, Profiles: nil,
+	})
+	_ = tw.WriteHeader(&tar.Header{Name: ManifestName, Mode: 0600, Size: int64(len(manifestBody))})
+	_, _ = tw.Write(manifestBody)
+	body := []byte("evil")
+	_ = tw.WriteHeader(&tar.Header{Name: "../etc/passwd", Mode: 0600, Size: int64(len(body))})
+	_, _ = tw.Write(body)
+	_ = tw.Close()
+
+	dst := newSeededManager(t, nil)
+	_, err := Restore(dst, &config.Config{GPGRecipient: "test@example.com"}, RestoreOptions{In: bytes.NewReader(buf.Bytes())})
+	if err == nil {
+		t.Fatal("Restore() error = nil, want path-traversal error")
+	}
+}
+
+func TestRestore_RejectsOversizedProfile(t *testing.T) {
+	huge := bytes.Repeat([]byte("x"), MaxProfileSize+1)
+	src := newSeededManager(t, map[string][]byte{"alpha": huge})
+	srcCfg := &config.Config{GPGRecipient: "test@example.com"}
+	var buf bytes.Buffer
+	if err := Export(src, srcCfg, ExportOptions{
+		Names: []string{"alpha"}, KubegonfigVersion: "0.2.0", Out: &buf,
+	}); err != nil {
+		t.Fatalf("Export() error: %v", err)
+	}
+	dst := newSeededManager(t, nil)
+	_, err := Restore(dst, &config.Config{GPGRecipient: "test@example.com"}, RestoreOptions{In: bytes.NewReader(buf.Bytes())})
+	if err == nil {
+		t.Fatal("Restore() error = nil, want size cap error")
+	}
 }
