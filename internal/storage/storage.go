@@ -233,6 +233,59 @@ func AtomicWriteInDir(dirPath, name string, data []byte, perm os.FileMode) error
 	return nil
 }
 
+// AtomicWriteStream atomically writes a file produced by fn into a verified
+// non-symlink directory. fn receives an io.Writer that streams into a temp
+// file; on success the temp is fsync'd, closed, and renamed into place. On
+// fn or write error the temp is removed and the destination is untouched.
+func AtomicWriteStream(dirPath, name string, perm os.FileMode, fn func(io.Writer) error) error {
+	if err := validateRelativeFileName(name); err != nil {
+		return err
+	}
+	if fn == nil {
+		return fmt.Errorf("AtomicWriteStream: fn must not be nil")
+	}
+	if err := EnsureDir(dirPath, 0700); err != nil {
+		return err
+	}
+	dir, err := openVerifiedDir(dirPath)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = dir.Close()
+	}()
+
+	tmpName, tmp, err := createTempFileInDir(dir, dirPath, ".tmp-", "", perm)
+	if err != nil {
+		return err
+	}
+	success := false
+	defer func() {
+		if !success {
+			_ = tmp.Close()
+			_ = unix.Unlinkat(int(dir.Fd()), tmpName, 0)
+		}
+	}()
+
+	if err := fn(tmp); err != nil {
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		return fmt.Errorf("sync temp file: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("close temp file: %w", err)
+	}
+	if err := unix.Renameat(int(dir.Fd()), tmpName, int(dir.Fd()), name); err != nil {
+		return fmt.Errorf("rename %s -> %s: %w", filepath.Join(dirPath, tmpName), filepath.Join(dirPath, name), err)
+	}
+	if err := dir.Sync(); err != nil {
+		return &PostCommitError{Op: "rename", Path: dirPath, Err: err}
+	}
+	success = true
+	return nil
+}
+
 // OpenUnlinkedTempFileInDir writes data to a temporary file in a verified
 // non-symlink directory, unlinks it, and returns the still-open file handle.
 func OpenUnlinkedTempFileInDir(dirPath, prefix, suffix string, data []byte, perm os.FileMode) (*os.File, error) {
