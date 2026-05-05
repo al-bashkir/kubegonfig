@@ -7,6 +7,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"io"
+	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
@@ -324,4 +325,143 @@ func TestExport_MissingProfile(t *testing.T) {
 	if err == nil {
 		t.Fatal("Export() error = nil, want missing profile error")
 	}
+}
+
+func TestExport_DecryptEmitsPlaintextValidatedKubeconfig(t *testing.T) {
+	installFakeGPGForBundle(t)
+
+	dataDir := t.TempDir()
+	cfg := &config.Config{DataDir: dataDir, GPGRecipient: "test@example.com"}
+	mgr, err := profile.NewManager(cfg)
+	if err != nil {
+		t.Fatalf("NewManager() error: %v", err)
+	}
+	if err := mgr.WriteEncrypted("alpha", validKubeconfigForBundle()); err != nil {
+		t.Fatalf("WriteEncrypted(): %v", err)
+	}
+
+	var buf bytes.Buffer
+	if err := Export(mgr, cfg, ExportOptions{
+		Names: []string{"alpha"}, Decrypt: true,
+		KubegonfigVersion: "0.2.0", Out: &buf,
+	}); err != nil {
+		t.Fatalf("Export() error: %v", err)
+	}
+
+	entries := readTarEntries(t, buf.Bytes())
+	manifest, err := ParseManifest(entries[ManifestName])
+	if err != nil {
+		t.Fatalf("ParseManifest(): %v", err)
+	}
+	if manifest.Encrypted {
+		t.Error("manifest.Encrypted = true on --decrypt export, want false")
+	}
+	if _, ok := entries[ProfilesDir+"alpha"+PlaintextExt]; !ok {
+		t.Errorf("plaintext entry missing; entries: %v", keysOf(entries))
+	}
+}
+
+func TestExport_DecryptRejectsInvalidPlaintext(t *testing.T) {
+	installFakeGPGForBundle(t)
+
+	dataDir := t.TempDir()
+	cfg := &config.Config{DataDir: dataDir, GPGRecipient: "test@example.com"}
+	mgr, err := profile.NewManager(cfg)
+	if err != nil {
+		t.Fatalf("NewManager() error: %v", err)
+	}
+	if err := mgr.WriteEncrypted("alpha", []byte("garbage-not-yaml")); err != nil {
+		t.Fatalf("WriteEncrypted(): %v", err)
+	}
+
+	var buf bytes.Buffer
+	err = Export(mgr, cfg, ExportOptions{
+		Names: []string{"alpha"}, Decrypt: true,
+		KubegonfigVersion: "0.2.0", Out: &buf,
+	})
+	if err == nil {
+		t.Fatal("Export() error = nil, want invalid plaintext kubeconfig error")
+	}
+}
+
+func TestExport_IncludeConfig(t *testing.T) {
+	dataDir := t.TempDir()
+	configDir := t.TempDir()
+	cfgBody := []byte("gpg_recipient: test@example.com\n")
+	if err := os.WriteFile(filepath.Join(configDir, "config.yaml"), cfgBody, 0600); err != nil {
+		t.Fatalf("write config.yaml: %v", err)
+	}
+	cfg := &config.Config{DataDir: dataDir, GPGRecipient: "test@example.com"}
+	cfg.SetPathForTest(filepath.Join(configDir, "config.yaml"))
+
+	mgr, err := profile.NewManager(cfg)
+	if err != nil {
+		t.Fatalf("NewManager() error: %v", err)
+	}
+	if err := mgr.WriteEncrypted("alpha", []byte("a")); err != nil {
+		t.Fatalf("WriteEncrypted(): %v", err)
+	}
+
+	var buf bytes.Buffer
+	if err := Export(mgr, cfg, ExportOptions{
+		Names: []string{"alpha"}, IncludeConfig: true,
+		KubegonfigVersion: "0.2.0", Out: &buf,
+	}); err != nil {
+		t.Fatalf("Export() error: %v", err)
+	}
+
+	entries := readTarEntries(t, buf.Bytes())
+	manifest, err := ParseManifest(entries[ManifestName])
+	if err != nil {
+		t.Fatalf("ParseManifest(): %v", err)
+	}
+	if !manifest.ConfigIncluded {
+		t.Error("manifest.ConfigIncluded = false, want true")
+	}
+	if got, ok := entries[ConfigName]; !ok || !bytes.Equal(got, cfgBody) {
+		t.Errorf("config.yaml entry = %q, want %q", got, cfgBody)
+	}
+}
+
+func validKubeconfigForBundle() []byte {
+	return []byte(`apiVersion: v1
+kind: Config
+clusters:
+  - name: cluster
+    cluster:
+      server: https://example.com
+users:
+  - name: user
+    user: {}
+contexts:
+  - name: context
+    context:
+      cluster: cluster
+      user: user
+current-context: context
+`)
+}
+
+// installFakeGPGForBundle installs stub gpg/gpg2 binaries whose --decrypt and
+// --encrypt are both `cat`. The on-disk "ciphertext" therefore equals the
+// plaintext for testing purposes.
+func installFakeGPGForBundle(t *testing.T) {
+	t.Helper()
+	dir := t.TempDir()
+	for _, name := range []string{"gpg2", "gpg"} {
+		path := filepath.Join(dir, name)
+		if err := os.WriteFile(path, []byte("#!/bin/sh\ncat\n"), 0700); err != nil {
+			t.Fatalf("write fake %s: %v", name, err)
+		}
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
+func keysOf(m map[string][]byte) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }

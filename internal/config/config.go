@@ -84,6 +84,9 @@ func (c *Config) Path() string {
 	return c.path
 }
 
+// SetPathForTest assigns the resolved config file path. Test-only.
+func (c *Config) SetPathForTest(path string) { c.path = path }
+
 // Recipients returns the list of GPG recipients for encryption.
 // The primary recipient is always included first.
 func (c *Config) Recipients() []string {
