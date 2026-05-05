@@ -684,6 +684,46 @@ func TestRestore_RejectsPathTraversal(t *testing.T) {
 	}
 }
 
+func TestExport_LockSerializesWithDelete(t *testing.T) {
+	mgr := newSeededManager(t, map[string][]byte{
+		"alpha": []byte("a"),
+		"beta":  []byte("b"),
+	})
+	cfg := &config.Config{GPGRecipient: "test@example.com"}
+
+	exportDone := make(chan error, 1)
+	deleteDone := make(chan error, 1)
+
+	var buf bytes.Buffer
+	go func() {
+		exportDone <- Export(mgr, cfg, ExportOptions{
+			Names: []string{"alpha", "beta"}, KubegonfigVersion: "0.2.0", Out: &buf,
+		})
+	}()
+	time.Sleep(10 * time.Millisecond)
+	go func() {
+		deleteDone <- mgr.Delete("alpha")
+	}()
+
+	if err := <-exportDone; err != nil {
+		t.Fatalf("Export() error: %v", err)
+	}
+	if err := <-deleteDone; err != nil {
+		t.Fatalf("Delete() error: %v", err)
+	}
+
+	entries := readTarEntries(t, buf.Bytes())
+	manifest, err := ParseManifest(entries[ManifestName])
+	if err != nil {
+		t.Fatalf("ParseManifest(): %v", err)
+	}
+	for _, p := range manifest.Profiles {
+		if _, ok := entries[p.File]; !ok {
+			t.Errorf("manifest lists %q but tar has no entry; entries: %v", p.File, keysOf(entries))
+		}
+	}
+}
+
 func TestRestore_MergeConfigUnionsRecipients(t *testing.T) {
 	srcCfg := &config.Config{DataDir: t.TempDir(), GPGRecipient: "src@example.com"}
 	srcCfg.GPGRecipients = []string{"shared@example.com"}
