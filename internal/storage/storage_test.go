@@ -4,8 +4,11 @@
 package storage
 
 import (
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -582,4 +585,72 @@ func fileExists(path string) bool {
 		return false
 	}
 	return !info.IsDir()
+}
+
+func TestAtomicWriteStream_Success(t *testing.T) {
+	dir := t.TempDir()
+
+	err := AtomicWriteStream(dir, "out.dat", 0600, func(w io.Writer) error {
+		if _, err := w.Write([]byte("hello, ")); err != nil {
+			return err
+		}
+		_, err := w.Write([]byte("world"))
+		return err
+	})
+	if err != nil {
+		t.Fatalf("AtomicWriteStream() error: %v", err)
+	}
+
+	got, err := os.ReadFile(filepath.Join(dir, "out.dat"))
+	if err != nil {
+		t.Fatalf("read written file: %v", err)
+	}
+	if string(got) != "hello, world" {
+		t.Fatalf("file contents = %q, want %q", got, "hello, world")
+	}
+
+	info, err := os.Stat(filepath.Join(dir, "out.dat"))
+	if err != nil {
+		t.Fatalf("stat written file: %v", err)
+	}
+	if info.Mode().Perm() != 0600 {
+		t.Errorf("mode = %v, want 0600", info.Mode().Perm())
+	}
+}
+
+func TestAtomicWriteStream_CallbackErrorRemovesTemp(t *testing.T) {
+	dir := t.TempDir()
+	want := errors.New("boom")
+
+	err := AtomicWriteStream(dir, "out.dat", 0600, func(w io.Writer) error {
+		if _, werr := w.Write([]byte("partial")); werr != nil {
+			return werr
+		}
+		return want
+	})
+	if !errors.Is(err, want) {
+		t.Fatalf("AtomicWriteStream() error = %v, want wrap of %v", err, want)
+	}
+
+	if _, statErr := os.Stat(filepath.Join(dir, "out.dat")); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("destination file should not exist after callback error: stat err = %v", statErr)
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("read dir: %v", err)
+	}
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), ".tmp-") {
+			t.Errorf("temp file %q left behind after callback error", e.Name())
+		}
+	}
+}
+
+func TestAtomicWriteStream_RejectsInvalidName(t *testing.T) {
+	dir := t.TempDir()
+	err := AtomicWriteStream(dir, "../escape", 0600, func(w io.Writer) error { return nil })
+	if err == nil {
+		t.Fatal("AtomicWriteStream() error = nil, want invalid name error")
+	}
 }

@@ -114,13 +114,25 @@ func init() {
 		editCmd,
 		cleanupCmd,
 		unlockCmd,
+		exportCmd,
+		restoreCmd,
 	)
 }
 
-// SetVersion sets the version string shown by --version.
+// version is the running binary version, set by SetVersion at startup.
+var version = "dev"
+
+// SetVersion sets the version string shown by --version and recorded in
+// exported archives.
 func SetVersion(v string) {
 	rootCmd.Version = v
+	if v != "" {
+		version = v
+	}
 }
+
+// Version returns the current running version (set by SetVersion).
+func Version() string { return version }
 
 // Execute is the main entry point for the CLI.
 func Execute() {

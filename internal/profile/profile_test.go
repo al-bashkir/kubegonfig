@@ -732,3 +732,101 @@ func profilePathForTest(m *Manager, name string) string {
 func currentPathForTest(m *Manager) string {
 	return filepath.Join(m.statePath(), currentFile)
 }
+
+func TestManager_Exists_True(t *testing.T) {
+	m := newTestManager(t)
+	writeProfile(t, m, "alpha")
+
+	got, err := m.Exists("alpha")
+	if err != nil {
+		t.Fatalf("Exists() error: %v", err)
+	}
+	if !got {
+		t.Error("Exists(\"alpha\") = false, want true")
+	}
+}
+
+func TestManager_Exists_False(t *testing.T) {
+	m := newTestManager(t)
+	got, err := m.Exists("missing")
+	if err != nil {
+		t.Fatalf("Exists() error: %v", err)
+	}
+	if got {
+		t.Error("Exists(\"missing\") = true, want false")
+	}
+}
+
+func TestManager_Exists_InvalidName(t *testing.T) {
+	m := newTestManager(t)
+	if _, err := m.Exists("../bad"); err == nil {
+		t.Fatal("Exists() error = nil, want invalid name error")
+	}
+}
+
+func TestManager_ReadEncrypted_ReturnsRawBlob(t *testing.T) {
+	m := newTestManager(t)
+	writeProfile(t, m, "alpha")
+
+	got, err := m.ReadEncrypted("alpha")
+	if err != nil {
+		t.Fatalf("ReadEncrypted() error: %v", err)
+	}
+	if string(got) != "encrypted" {
+		t.Errorf("ReadEncrypted() = %q, want %q", got, "encrypted")
+	}
+}
+
+func TestManager_ReadEncrypted_MissingProfile(t *testing.T) {
+	m := newTestManager(t)
+	_, err := m.ReadEncrypted("missing")
+	if err == nil {
+		t.Fatal("ReadEncrypted() error = nil, want missing profile error")
+	}
+	if !strings.Contains(err.Error(), `profile "missing" not found`) {
+		t.Fatalf("ReadEncrypted() error = %v, want %q substring", err, `profile "missing" not found`)
+	}
+}
+
+func TestManager_ReadEncrypted_InvalidName(t *testing.T) {
+	m := newTestManager(t)
+	if _, err := m.ReadEncrypted("../bad"); err == nil {
+		t.Fatal("ReadEncrypted() error = nil, want invalid name error")
+	}
+}
+
+func TestManager_WriteEncrypted_StoresBlob(t *testing.T) {
+	m := newTestManager(t)
+	if err := m.WriteEncrypted("alpha", []byte("ciphertext")); err != nil {
+		t.Fatalf("WriteEncrypted() error: %v", err)
+	}
+	got, err := m.ReadEncrypted("alpha")
+	if err != nil {
+		t.Fatalf("ReadEncrypted() error: %v", err)
+	}
+	if string(got) != "ciphertext" {
+		t.Errorf("stored = %q, want %q", got, "ciphertext")
+	}
+}
+
+func TestManager_WriteEncrypted_OverwritesExisting(t *testing.T) {
+	m := newTestManager(t)
+	writeProfile(t, m, "alpha")
+	if err := m.WriteEncrypted("alpha", []byte("rewritten")); err != nil {
+		t.Fatalf("WriteEncrypted() error: %v", err)
+	}
+	got, err := m.ReadEncrypted("alpha")
+	if err != nil {
+		t.Fatalf("ReadEncrypted() error: %v", err)
+	}
+	if string(got) != "rewritten" {
+		t.Errorf("after overwrite = %q, want %q", got, "rewritten")
+	}
+}
+
+func TestManager_WriteEncrypted_InvalidName(t *testing.T) {
+	m := newTestManager(t)
+	if err := m.WriteEncrypted("../bad", []byte("x")); err == nil {
+		t.Fatal("WriteEncrypted() error = nil, want invalid name error")
+	}
+}

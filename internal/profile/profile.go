@@ -171,6 +171,32 @@ func (m *Manager) Decrypt(name string) ([]byte, error) {
 	return m.decryptProfile(name)
 }
 
+// ReadEncrypted returns the raw encrypted blob for a profile without invoking
+// GPG. Used for pass-through export of the on-disk ciphertext.
+func (m *Manager) ReadEncrypted(name string) ([]byte, error) {
+	if err := shell.ValidateName(name); err != nil {
+		return nil, err
+	}
+	data, err := m.readProfile(name)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("profile %q not found", name)
+		}
+		return nil, err
+	}
+	return data, nil
+}
+
+// WriteEncrypted atomically writes a raw encrypted blob for the named profile.
+// Caller is responsible for the blob being valid GPG ciphertext for the local
+// recipients; this method does NOT invoke GPG.
+func (m *Manager) WriteEncrypted(name string, blob []byte) error {
+	if err := shell.ValidateName(name); err != nil {
+		return err
+	}
+	return m.writeProfile(name, blob)
+}
+
 func (m *Manager) decryptProfile(name string) ([]byte, error) {
 	encrypted, err := m.readProfile(name)
 	if err != nil {
@@ -431,6 +457,14 @@ func (m *Manager) rollbackRenameAfterCurrentFailure(oldName, newName string, upd
 
 func (m *Manager) profileExists(name string) (bool, error) {
 	return storage.FileExistsInDir(m.profilesPath(), profileFileName(name))
+}
+
+// Exists reports whether a profile with the given name is stored locally.
+func (m *Manager) Exists(name string) (bool, error) {
+	if err := shell.ValidateName(name); err != nil {
+		return false, err
+	}
+	return m.profileExists(name)
 }
 
 func (m *Manager) setCurrent(name string) error {
