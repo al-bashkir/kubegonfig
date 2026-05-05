@@ -102,6 +102,8 @@ kubegonfig env my-cluster --shell fish | source
 | `rename <old> <new>` | Rename a profile |
 | `delete <name>` (`rm`) | Delete a profile (`--force` to skip prompt) |
 | `unlock <name>...` | Decrypt one or more profiles to the runtime dir without activating any |
+| `export [name...] -o <file>` | Write a tar archive of selected (or `--all`) profiles. `--decrypt` for plaintext (refused into a TTY or the data directory); `--profiles-only` to skip `config.yaml` |
+| `restore <archive>` | Restore profiles from an archive. `--force` overwrites; `--skip-existing` keeps local; `--merge-config` unions recipients; `--dry-run` previews |
 | `cleanup` | Remove stale temp files from runtime dir |
 
 Global options include `--quiet` (`-q`) to suppress informational stderr messages and the standard Cobra `--help`/`--version` output.
@@ -124,6 +126,30 @@ $XDG_RUNTIME_DIR/kubegonfig/
 ```
 
 If `XDG_RUNTIME_DIR` is not set, runtime files are stored in a private directory under the system temp directory named `kubegonfig-<uid>`.
+
+## Backup and restore
+
+Back up the encrypted profile store, optionally including `config.yaml`:
+
+```bash
+kubegonfig export --all -o backup.tar
+```
+
+Restore on the same or another machine with kubegonfig and a usable GPG keyring:
+
+```bash
+kubegonfig restore backup.tar
+```
+
+Round-trips keep profiles encrypted end-to-end. To export plaintext for interop with non-kubegonfig tooling, pass `--decrypt`:
+
+```bash
+kubegonfig export production --decrypt -o /var/cache/builds/prod.tar
+```
+
+Plaintext export is refused when stdout is a terminal or when the destination resolves inside the kubegonfig data directory.
+
+Restore is additive: per-profile failures do not roll back profiles that were already written. Use `--dry-run` to validate an archive and preview the plan without writing.
 
 ## Configuration
 
