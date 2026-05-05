@@ -684,6 +684,72 @@ func TestRestore_RejectsPathTraversal(t *testing.T) {
 	}
 }
 
+func TestRestore_PlaintextArchiveReEncryptsWithLocalRecipients(t *testing.T) {
+	installFakeGPGForBundle(t)
+
+	srcCfg := &config.Config{DataDir: t.TempDir(), GPGRecipient: "old@example.com"}
+	srcMgr, err := profile.NewManager(srcCfg)
+	if err != nil {
+		t.Fatalf("NewManager(): %v", err)
+	}
+	if err := srcMgr.WriteEncrypted("alpha", validKubeconfigForBundle()); err != nil {
+		t.Fatalf("WriteEncrypted(): %v", err)
+	}
+
+	var buf bytes.Buffer
+	if err := Export(srcMgr, srcCfg, ExportOptions{
+		Names: []string{"alpha"}, Decrypt: true,
+		KubegonfigVersion: "0.2.0", Out: &buf,
+	}); err != nil {
+		t.Fatalf("Export() error: %v", err)
+	}
+
+	dstCfg := &config.Config{DataDir: t.TempDir(), GPGRecipient: "new@example.com"}
+	dstMgr, err := profile.NewManager(dstCfg)
+	if err != nil {
+		t.Fatalf("NewManager(): %v", err)
+	}
+
+	if _, err := Restore(dstMgr, dstCfg, RestoreOptions{In: bytes.NewReader(buf.Bytes())}); err != nil {
+		t.Fatalf("Restore() error: %v", err)
+	}
+
+	got, err := dstMgr.ReadEncrypted("alpha")
+	if err != nil {
+		t.Fatalf("ReadEncrypted(): %v", err)
+	}
+	if !bytes.Equal(got, validKubeconfigForBundle()) {
+		t.Errorf("re-encrypted body mismatch")
+	}
+}
+
+func TestRestore_PlaintextArchiveRejectsInvalidKubeconfig(t *testing.T) {
+	installFakeGPGForBundle(t)
+
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+	now := time.Now().UTC().Truncate(time.Second)
+	manifestBody, _ := MarshalManifest(&Manifest{
+		SchemaVersion: 1, CreatedAt: now, KubegonfigVersion: "0.2.0",
+		Encrypted: false, ProfileCount: 1,
+		Profiles: []ManifestProfile{{Name: "alpha", File: ProfilesDir + "alpha" + PlaintextExt}},
+	})
+	_ = tw.WriteHeader(&tar.Header{Name: ManifestName, Mode: 0600, Size: int64(len(manifestBody)), ModTime: now})
+	_, _ = tw.Write(manifestBody)
+	body := []byte("not-a-kubeconfig")
+	_ = tw.WriteHeader(&tar.Header{Name: ProfilesDir + "alpha" + PlaintextExt, Mode: 0600, Size: int64(len(body)), ModTime: now})
+	_, _ = tw.Write(body)
+	_ = tw.Close()
+
+	dstCfg := &config.Config{DataDir: t.TempDir(), GPGRecipient: "new@example.com"}
+	dstMgr, _ := profile.NewManager(dstCfg)
+
+	_, err := Restore(dstMgr, dstCfg, RestoreOptions{In: bytes.NewReader(buf.Bytes())})
+	if err == nil {
+		t.Fatal("Restore() error = nil, want invalid kubeconfig error")
+	}
+}
+
 func TestRestore_RejectsOversizedProfile(t *testing.T) {
 	huge := bytes.Repeat([]byte("x"), MaxProfileSize+1)
 	src := newSeededManager(t, map[string][]byte{"alpha": huge})
