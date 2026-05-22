@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestCreateAndCleanup(t *testing.T) {
@@ -361,4 +362,170 @@ func resetTracked(t *testing.T) {
 	trackedMu.Lock()
 	tracked = nil
 	trackedMu.Unlock()
+}
+
+func TestProbeCachedHit(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("XDG_RUNTIME_DIR", tmp)
+	runtimeDir := filepath.Join(tmp, "kubegonfig")
+	if err := os.MkdirAll(runtimeDir, 0700); err != nil {
+		t.Fatalf("mkdir runtime: %v", err)
+	}
+	plaintext := filepath.Join(runtimeDir, "prod.yaml")
+	if err := os.WriteFile(plaintext, []byte("hi"), 0600); err != nil {
+		t.Fatalf("write plaintext: %v", err)
+	}
+	cipherMtime := time.Now().Add(-2 * time.Hour)
+	plaintextMtime := cipherMtime.Add(time.Hour)
+	if err := os.Chtimes(plaintext, plaintextMtime, plaintextMtime); err != nil {
+		t.Fatalf("chtimes: %v", err)
+	}
+
+	path, hit, err := ProbeCached("prod", cipherMtime)
+	if err != nil {
+		t.Fatalf("ProbeCached() error: %v", err)
+	}
+	if !hit {
+		t.Fatal("ProbeCached() hit = false, want true")
+	}
+	if path != plaintext {
+		t.Errorf("path = %q, want %q", path, plaintext)
+	}
+}
+
+func TestProbeCachedMissMissing(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("XDG_RUNTIME_DIR", tmp)
+
+	path, hit, err := ProbeCached("prod", time.Now())
+	if err != nil {
+		t.Fatalf("ProbeCached() error: %v", err)
+	}
+	if hit {
+		t.Error("hit = true, want false (file missing)")
+	}
+	want := filepath.Join(tmp, "kubegonfig", "prod.yaml")
+	if path != want {
+		t.Errorf("path = %q, want %q", path, want)
+	}
+}
+
+func TestProbeCachedMissEqualMtime(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("XDG_RUNTIME_DIR", tmp)
+	runtimeDir := filepath.Join(tmp, "kubegonfig")
+	if err := os.MkdirAll(runtimeDir, 0700); err != nil {
+		t.Fatalf("mkdir runtime: %v", err)
+	}
+	plaintext := filepath.Join(runtimeDir, "prod.yaml")
+	if err := os.WriteFile(plaintext, []byte("hi"), 0600); err != nil {
+		t.Fatalf("write plaintext: %v", err)
+	}
+	mtime := time.Now().Add(-time.Hour).Truncate(time.Second)
+	if err := os.Chtimes(plaintext, mtime, mtime); err != nil {
+		t.Fatalf("chtimes: %v", err)
+	}
+
+	_, hit, err := ProbeCached("prod", mtime)
+	if err != nil {
+		t.Fatalf("ProbeCached() error: %v", err)
+	}
+	if hit {
+		t.Error("hit = true for equal mtime, want false (strict >)")
+	}
+}
+
+func TestProbeCachedMissStale(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("XDG_RUNTIME_DIR", tmp)
+	runtimeDir := filepath.Join(tmp, "kubegonfig")
+	if err := os.MkdirAll(runtimeDir, 0700); err != nil {
+		t.Fatalf("mkdir runtime: %v", err)
+	}
+	plaintext := filepath.Join(runtimeDir, "prod.yaml")
+	if err := os.WriteFile(plaintext, []byte("hi"), 0600); err != nil {
+		t.Fatalf("write plaintext: %v", err)
+	}
+	plaintextMtime := time.Now().Add(-2 * time.Hour)
+	cipherMtime := plaintextMtime.Add(time.Hour)
+	if err := os.Chtimes(plaintext, plaintextMtime, plaintextMtime); err != nil {
+		t.Fatalf("chtimes: %v", err)
+	}
+
+	_, hit, err := ProbeCached("prod", cipherMtime)
+	if err != nil {
+		t.Fatalf("ProbeCached() error: %v", err)
+	}
+	if hit {
+		t.Error("hit = true for stale plaintext, want false")
+	}
+}
+
+func TestProbeCachedMissSymlink(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("XDG_RUNTIME_DIR", tmp)
+	runtimeDir := filepath.Join(tmp, "kubegonfig")
+	if err := os.MkdirAll(runtimeDir, 0700); err != nil {
+		t.Fatalf("mkdir runtime: %v", err)
+	}
+	target := filepath.Join(runtimeDir, "target.yaml")
+	if err := os.WriteFile(target, []byte("hi"), 0600); err != nil {
+		t.Fatalf("write target: %v", err)
+	}
+	link := filepath.Join(runtimeDir, "prod.yaml")
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	_, hit, err := ProbeCached("prod", time.Now().Add(-2*time.Hour))
+	if err != nil {
+		t.Fatalf("ProbeCached() error: %v", err)
+	}
+	if hit {
+		t.Error("hit = true for symlink, want false")
+	}
+}
+
+func TestProbeCachedInvalidName(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("XDG_RUNTIME_DIR", tmp)
+
+	if _, _, err := ProbeCached("../bad", time.Now()); err == nil {
+		t.Fatal("ProbeCached() error = nil, want validation error")
+	}
+}
+
+func TestProbeCachedDoesNotTrackOnHit(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("XDG_RUNTIME_DIR", tmp)
+	resetTracked(t)
+	runtimeDir := filepath.Join(tmp, "kubegonfig")
+	if err := os.MkdirAll(runtimeDir, 0700); err != nil {
+		t.Fatalf("mkdir runtime: %v", err)
+	}
+	plaintext := filepath.Join(runtimeDir, "prod.yaml")
+	if err := os.WriteFile(plaintext, []byte("hi"), 0600); err != nil {
+		t.Fatalf("write plaintext: %v", err)
+	}
+	plaintextMtime := time.Now()
+	cipherMtime := plaintextMtime.Add(-time.Hour)
+	if err := os.Chtimes(plaintext, plaintextMtime, plaintextMtime); err != nil {
+		t.Fatalf("chtimes: %v", err)
+	}
+
+	if _, hit, err := ProbeCached("prod", cipherMtime); err != nil || !hit {
+		t.Fatalf("ProbeCached() hit=%v err=%v, want hit=true", hit, err)
+	}
+
+	trackedMu.Lock()
+	got := append([]string(nil), tracked...)
+	trackedMu.Unlock()
+	if len(got) != 0 {
+		t.Errorf("tracked = %v, want empty after cache hit", got)
+	}
+
+	CleanupAll()
+	if _, err := os.Stat(plaintext); err != nil {
+		t.Errorf("plaintext removed by CleanupAll after ProbeCached hit: %v", err)
+	}
 }

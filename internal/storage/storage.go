@@ -13,6 +13,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"time"
 
 	"golang.org/x/sys/unix"
 )
@@ -441,6 +442,37 @@ func RegularFileInDir(dirPath, name string) (bool, error) {
 		return false, fmt.Errorf("stat %s: %w", filepath.Join(dirPath, name), err)
 	}
 	return stat.Mode&unix.S_IFMT == unix.S_IFREG, nil
+}
+
+// RegularFileMtimeInDir returns the modification time of a regular file inside
+// a verified non-symlink directory. ok is false when the entry is missing or
+// is not a regular file (symlink, directory, device, socket, FIFO).
+func RegularFileMtimeInDir(dirPath, name string) (time.Time, bool, error) {
+	if err := validateRelativeFileName(name); err != nil {
+		return time.Time{}, false, err
+	}
+	dir, err := openVerifiedDir(dirPath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return time.Time{}, false, nil
+		}
+		return time.Time{}, false, err
+	}
+	defer func() {
+		_ = dir.Close()
+	}()
+
+	var stat unix.Stat_t
+	if err := unix.Fstatat(int(dir.Fd()), name, &stat, unix.AT_SYMLINK_NOFOLLOW); err != nil {
+		if os.IsNotExist(err) {
+			return time.Time{}, false, nil
+		}
+		return time.Time{}, false, fmt.Errorf("stat %s: %w", filepath.Join(dirPath, name), err)
+	}
+	if stat.Mode&unix.S_IFMT != unix.S_IFREG {
+		return time.Time{}, false, nil
+	}
+	return time.Unix(int64(stat.Mtim.Sec), int64(stat.Mtim.Nsec)), true, nil
 }
 
 func openVerifiedDir(path string) (*os.File, error) {
