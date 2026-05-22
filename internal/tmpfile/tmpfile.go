@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	"kubegonfig/internal/shell"
 	"kubegonfig/internal/storage"
@@ -53,6 +54,36 @@ func Create(name string, data []byte) (string, error) {
 	trackedMu.Unlock()
 
 	return path, nil
+}
+
+// ProbeCached reports whether the plaintext activation file for name is fresh
+// enough to reuse. A cache hit requires a regular file in the runtime dir with
+// modification time strictly greater than cipherMtime. On a hit the file is
+// NOT added to the tracked-for-cleanup list: another shell may already depend
+// on the path through an earlier eval'd `kubegonfig use`.
+func ProbeCached(name string, cipherMtime time.Time) (string, bool, error) {
+	if err := shell.ValidateName(name); err != nil {
+		return "", false, err
+	}
+
+	dir, err := storage.RuntimeDir()
+	if err != nil {
+		return "", false, fmt.Errorf("resolve runtime dir: %w", err)
+	}
+	fileName := name + ".yaml"
+	path := filepath.Join(dir, fileName)
+
+	mtime, ok, err := storage.RegularFileMtimeInDir(dir, fileName)
+	if err != nil {
+		return path, false, err
+	}
+	if !ok {
+		return path, false, nil
+	}
+	if !mtime.After(cipherMtime) {
+		return path, false, nil
+	}
+	return path, true, nil
 }
 
 // OpenUnlinked writes decrypted data to an open temp file and immediately

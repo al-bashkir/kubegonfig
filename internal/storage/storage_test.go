@@ -654,3 +654,93 @@ func TestAtomicWriteStream_RejectsInvalidName(t *testing.T) {
 		t.Fatal("AtomicWriteStream() error = nil, want invalid name error")
 	}
 }
+
+func TestRegularFileMtimeInDir(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "file")
+	if err := os.WriteFile(path, []byte("hello"), 0600); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+	want := time.Now().Add(-2 * time.Hour).Truncate(time.Second)
+	if err := os.Chtimes(path, want, want); err != nil {
+		t.Fatalf("chtimes: %v", err)
+	}
+
+	mtime, ok, err := RegularFileMtimeInDir(dir, "file")
+	if err != nil {
+		t.Fatalf("RegularFileMtimeInDir() error: %v", err)
+	}
+	if !ok {
+		t.Fatal("RegularFileMtimeInDir() ok = false, want true")
+	}
+	if !mtime.Equal(want) {
+		t.Errorf("mtime = %v, want %v", mtime, want)
+	}
+}
+
+func TestRegularFileMtimeInDirMissing(t *testing.T) {
+	dir := t.TempDir()
+	mtime, ok, err := RegularFileMtimeInDir(dir, "missing")
+	if err != nil {
+		t.Fatalf("RegularFileMtimeInDir() error: %v", err)
+	}
+	if ok {
+		t.Errorf("ok = true, want false")
+	}
+	if !mtime.IsZero() {
+		t.Errorf("mtime = %v, want zero", mtime)
+	}
+}
+
+func TestRegularFileMtimeInDirRejectsSymlink(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "target")
+	if err := os.WriteFile(target, []byte("x"), 0600); err != nil {
+		t.Fatalf("write target: %v", err)
+	}
+	link := filepath.Join(dir, "link")
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	_, ok, err := RegularFileMtimeInDir(dir, "link")
+	if err != nil {
+		t.Fatalf("RegularFileMtimeInDir() error: %v", err)
+	}
+	if ok {
+		t.Errorf("ok = true for symlink, want false")
+	}
+}
+
+func TestRegularFileMtimeInDirRejectsDirectory(t *testing.T) {
+	dir := t.TempDir()
+	sub := filepath.Join(dir, "sub")
+	if err := os.Mkdir(sub, 0700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	_, ok, err := RegularFileMtimeInDir(dir, "sub")
+	if err != nil {
+		t.Fatalf("RegularFileMtimeInDir() error: %v", err)
+	}
+	if ok {
+		t.Errorf("ok = true for directory, want false")
+	}
+}
+
+func TestRegularFileMtimeInDirMissingDir(t *testing.T) {
+	_, ok, err := RegularFileMtimeInDir("/nonexistent/dir", "file")
+	if err != nil {
+		t.Fatalf("RegularFileMtimeInDir() error: %v", err)
+	}
+	if ok {
+		t.Errorf("ok = true for missing dir, want false")
+	}
+}
+
+func TestRegularFileMtimeInDirRejectsInvalidName(t *testing.T) {
+	dir := t.TempDir()
+	if _, _, err := RegularFileMtimeInDir(dir, "../etc"); err == nil {
+		t.Fatal("RegularFileMtimeInDir() error = nil, want validation error")
+	}
+}
