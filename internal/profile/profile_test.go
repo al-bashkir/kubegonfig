@@ -824,6 +824,32 @@ func TestManager_WriteEncrypted_OverwritesExisting(t *testing.T) {
 	}
 }
 
+func TestProfileMtimeReturnsCiphertextMtime(t *testing.T) {
+	m := newTestManager(t)
+	writeProfile(t, m, "prod")
+	want := time.Now().Add(-3 * time.Hour).Truncate(time.Second)
+	if err := os.Chtimes(profilePathForTest(m, "prod"), want, want); err != nil {
+		t.Fatalf("chtimes: %v", err)
+	}
+
+	got, err := m.profileMtime("prod")
+	if err != nil {
+		t.Fatalf("profileMtime() error: %v", err)
+	}
+	if !got.Equal(want) {
+		t.Errorf("profileMtime() = %v, want %v", got, want)
+	}
+}
+
+func TestProfileMtimeMissingProfile(t *testing.T) {
+	m := newTestManager(t)
+	if _, err := m.profileMtime("ghost"); err == nil {
+		t.Fatal("profileMtime() error = nil, want not-found error")
+	} else if !strings.Contains(err.Error(), `profile "ghost" not found`) {
+		t.Fatalf("profileMtime() error = %v, want contains \"profile \\\"ghost\\\" not found\"", err)
+	}
+}
+
 func TestManager_WriteEncrypted_InvalidName(t *testing.T) {
 	m := newTestManager(t)
 	if err := m.WriteEncrypted("../bad", []byte("x")); err == nil {

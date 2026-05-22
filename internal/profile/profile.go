@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"kubegonfig/internal/config"
 	"kubegonfig/internal/crypto"
@@ -66,6 +67,17 @@ func (m *Manager) writeProfile(name string, data []byte) error {
 
 func (m *Manager) readProfile(name string) ([]byte, error) {
 	return storage.ReadFileInDir(m.profilesPath(), profileFileName(name))
+}
+
+func (m *Manager) profileMtime(name string) (time.Time, error) {
+	mtime, ok, err := storage.RegularFileMtimeInDir(m.profilesPath(), profileFileName(name))
+	if err != nil {
+		return time.Time{}, err
+	}
+	if !ok {
+		return time.Time{}, fmt.Errorf("profile %q not found", name)
+	}
+	return mtime, nil
 }
 
 func (m *Manager) writeCurrent(name string) error {
