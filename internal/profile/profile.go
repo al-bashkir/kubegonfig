@@ -269,29 +269,66 @@ func (m *Manager) Edit(name string, edit func([]byte) ([]byte, error)) (changed 
 	return changed, err
 }
 
-// Activate decrypts a profile, creates its activation file through create, and
-// records it as current while holding the profile lock.
-func (m *Manager) Activate(name string, create func([]byte) (string, error), cleanup func(string) error) (path string, err error) {
+// Activate locks the manager, asks probe whether the existing activation file
+// is fresh enough to reuse, decrypts the profile only on a cache miss, calls
+// create when a fresh activation file must be materialized, and records the
+// profile as current.
+//
+// probe receives the modification time of the encrypted profile and reports
+// whether a usable plaintext already exists for name. On a cache miss it
+// returns the path where create should write; on a hit it returns the path of
+// the existing file.
+//
+// create is invoked only on a cache miss and receives the decrypted
+// kubeconfig bytes.
+//
+// cleanup is invoked when setCurrent fails after a cache miss to remove the
+// just-created activation file. It is NOT invoked on a cache-hit failure: the
+// pre-existing file may still be in use by another shell that earlier
+// evaluated `kubegonfig use`.
+func (m *Manager) Activate(
+	name string,
+	probe func(name string, cipherMtime time.Time) (string, bool, error),
+	create func(data []byte) (string, error),
+	cleanup func(string) error,
+) (path string, err error) {
 	if err := shell.ValidateName(name); err != nil {
 		return "", err
+	}
+	if probe == nil {
+		return "", fmt.Errorf("probe callback must not be nil")
 	}
 	if create == nil {
 		return "", fmt.Errorf("activation callback must not be nil")
 	}
 
 	err = m.WithLock(func() error {
-		data, err := m.decryptProfile(name)
+		cipherMtime, err := m.profileMtime(name)
 		if err != nil {
 			return err
 		}
 
-		path, err = create(data)
+		cachedPath, hit, err := probe(name, cipherMtime)
 		if err != nil {
 			return err
+		}
+
+		if hit {
+			path = cachedPath
+		} else {
+			data, err := m.decryptProfile(name)
+			if err != nil {
+				return err
+			}
+			created, err := create(data)
+			if err != nil {
+				return err
+			}
+			path = created
 		}
 
 		if err := m.setCurrent(name); err != nil {
-			if cleanup != nil {
+			if !hit && cleanup != nil {
 				if cleanupErr := cleanup(path); cleanupErr != nil {
 					return errors.Join(err, fmt.Errorf("cleanup activation file: %w", cleanupErr))
 				}

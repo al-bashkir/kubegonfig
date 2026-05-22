@@ -145,11 +145,15 @@ func TestActivateHoldsLockDuringCreateCallback(t *testing.T) {
 	createdPath := filepath.Join(t.TempDir(), "prod.yaml")
 	activateDone := make(chan error, 1)
 	go func() {
-		path, err := m.Activate("prod", func(data []byte) (string, error) {
-			close(entered)
-			<-release
-			return createdPath, nil
-		}, nil)
+		path, err := m.Activate("prod",
+			func(name string, cipherMtime time.Time) (string, bool, error) {
+				return "", false, nil
+			},
+			func(data []byte) (string, error) {
+				close(entered)
+				<-release
+				return createdPath, nil
+			}, nil)
 		if err == nil && path == "" {
 			err = fmt.Errorf("Activate() path is empty")
 		}
@@ -181,12 +185,16 @@ func TestActivateCleansUpCreatedPathOnCurrentUpdateFailure(t *testing.T) {
 
 	createdPath := filepath.Join(t.TempDir(), "prod.yaml")
 	cleanedPath := ""
-	_, err := m.Activate("prod", func(data []byte) (string, error) {
-		return createdPath, nil
-	}, func(path string) error {
-		cleanedPath = path
-		return nil
-	})
+	_, err := m.Activate("prod",
+		func(name string, cipherMtime time.Time) (string, bool, error) {
+			return "", false, nil
+		},
+		func(data []byte) (string, error) {
+			return createdPath, nil
+		}, func(path string) error {
+			cleanedPath = path
+			return nil
+		})
 	if err == nil {
 		t.Fatal("Activate() error = nil, want current update error")
 	}
@@ -203,11 +211,15 @@ func TestActivateReportsCleanupFailureAfterCurrentUpdateFailure(t *testing.T) {
 	replaceStateDirWithSymlink(t, m)
 
 	cleanupErr := errors.New("cleanup failed")
-	_, err := m.Activate("prod", func(data []byte) (string, error) {
-		return filepath.Join(t.TempDir(), "prod.yaml"), nil
-	}, func(path string) error {
-		return cleanupErr
-	})
+	_, err := m.Activate("prod",
+		func(name string, cipherMtime time.Time) (string, bool, error) {
+			return "", false, nil
+		},
+		func(data []byte) (string, error) {
+			return filepath.Join(t.TempDir(), "prod.yaml"), nil
+		}, func(path string) error {
+			return cleanupErr
+		})
 	if err == nil {
 		t.Fatal("Activate() error = nil, want current update and cleanup error")
 	}
@@ -821,6 +833,155 @@ func TestManager_WriteEncrypted_OverwritesExisting(t *testing.T) {
 	}
 	if string(got) != "rewritten" {
 		t.Errorf("after overwrite = %q, want %q", got, "rewritten")
+	}
+}
+
+func TestActivateCacheHitSkipsCreate(t *testing.T) {
+	m := newTestManager(t)
+	writeProfile(t, m, "prod")
+
+	probeCalls := 0
+	createCalls := 0
+	probe := func(name string, cipherMtime time.Time) (string, bool, error) {
+		probeCalls++
+		if name != "prod" {
+			t.Fatalf("probe got name %q, want \"prod\"", name)
+		}
+		return "/cached/prod.yaml", true, nil
+	}
+	create := func(data []byte) (string, error) {
+		createCalls++
+		return "/created/prod.yaml", nil
+	}
+
+	path, err := m.Activate("prod", probe, create, nil)
+	if err != nil {
+		t.Fatalf("Activate() error: %v", err)
+	}
+	if path != "/cached/prod.yaml" {
+		t.Errorf("path = %q, want \"/cached/prod.yaml\"", path)
+	}
+	if probeCalls != 1 {
+		t.Errorf("probe called %d times, want 1", probeCalls)
+	}
+	if createCalls != 0 {
+		t.Errorf("create called %d times on hit, want 0", createCalls)
+	}
+	current, err := m.GetCurrent()
+	if err != nil {
+		t.Fatalf("GetCurrent() error: %v", err)
+	}
+	if current != "prod" {
+		t.Errorf("GetCurrent() = %q, want \"prod\"", current)
+	}
+}
+
+func TestActivateCacheMissCallsCreate(t *testing.T) {
+	installFakeGPG(t)
+	m := newTestManager(t)
+	writePlaintextProfile(t, m, "prod")
+
+	createCalls := 0
+	createPath := filepath.Join(t.TempDir(), "prod.yaml")
+	probe := func(name string, cipherMtime time.Time) (string, bool, error) {
+		return createPath, false, nil
+	}
+	create := func(data []byte) (string, error) {
+		createCalls++
+		return createPath, nil
+	}
+
+	path, err := m.Activate("prod", probe, create, nil)
+	if err != nil {
+		t.Fatalf("Activate() error: %v", err)
+	}
+	if path != createPath {
+		t.Errorf("path = %q, want %q", path, createPath)
+	}
+	if createCalls != 1 {
+		t.Errorf("create called %d times, want 1", createCalls)
+	}
+}
+
+func TestActivateMissCleanupOnCurrentUpdateFailure(t *testing.T) {
+	installFakeGPG(t)
+	m := newTestManager(t)
+	writePlaintextProfile(t, m, "prod")
+	setCurrentForTest(t, m, "prod")
+	replaceStateDirWithSymlink(t, m)
+
+	createdPath := filepath.Join(t.TempDir(), "prod.yaml")
+	cleanedPath := ""
+	probe := func(name string, cipherMtime time.Time) (string, bool, error) {
+		return createdPath, false, nil
+	}
+	create := func(data []byte) (string, error) {
+		return createdPath, nil
+	}
+	cleanup := func(path string) error {
+		cleanedPath = path
+		return nil
+	}
+
+	if _, err := m.Activate("prod", probe, create, cleanup); err == nil {
+		t.Fatal("Activate() error = nil, want current update error")
+	}
+	if cleanedPath != createdPath {
+		t.Fatalf("cleanup path = %q, want %q", cleanedPath, createdPath)
+	}
+}
+
+func TestActivateHitNoCleanupOnCurrentUpdateFailure(t *testing.T) {
+	m := newTestManager(t)
+	writeProfile(t, m, "prod")
+	setCurrentForTest(t, m, "prod")
+	replaceStateDirWithSymlink(t, m)
+
+	cachedPath := filepath.Join(t.TempDir(), "prod.yaml")
+	cleanupCalls := 0
+	probe := func(name string, cipherMtime time.Time) (string, bool, error) {
+		return cachedPath, true, nil
+	}
+	create := func(data []byte) (string, error) {
+		t.Fatal("create called on cache hit")
+		return "", nil
+	}
+	cleanup := func(path string) error {
+		cleanupCalls++
+		return nil
+	}
+
+	if _, err := m.Activate("prod", probe, create, cleanup); err == nil {
+		t.Fatal("Activate() error = nil, want current update error")
+	}
+	if cleanupCalls != 0 {
+		t.Errorf("cleanup called %d times on hit failure, want 0", cleanupCalls)
+	}
+}
+
+func TestActivateProbePassesCiphertextMtime(t *testing.T) {
+	m := newTestManager(t)
+	writeProfile(t, m, "prod")
+	want := time.Now().Add(-7 * time.Hour).Truncate(time.Second)
+	if err := os.Chtimes(profilePathForTest(m, "prod"), want, want); err != nil {
+		t.Fatalf("chtimes: %v", err)
+	}
+
+	var gotMtime time.Time
+	probe := func(name string, cipherMtime time.Time) (string, bool, error) {
+		gotMtime = cipherMtime
+		return "/cached/prod.yaml", true, nil
+	}
+	create := func(data []byte) (string, error) {
+		t.Fatal("create called on hit")
+		return "", nil
+	}
+
+	if _, err := m.Activate("prod", probe, create, nil); err != nil {
+		t.Fatalf("Activate() error: %v", err)
+	}
+	if !gotMtime.Equal(want) {
+		t.Errorf("probe got mtime %v, want %v", gotMtime, want)
 	}
 }
 

@@ -22,9 +22,14 @@ func activateProfile(name, shellFlag string) (string, error) {
 		return "", err
 	}
 
-	path, err := mgr.Activate(name, func(data []byte) (string, error) {
-		return tmpfile.Create(name, data)
-	}, tmpfile.Remove)
+	path, err := mgr.Activate(
+		name,
+		tmpfile.ProbeCached,
+		func(data []byte) (string, error) {
+			return tmpfile.Create(name, data)
+		},
+		tmpfile.Remove,
+	)
 	if err != nil {
 		return "", err
 	}
