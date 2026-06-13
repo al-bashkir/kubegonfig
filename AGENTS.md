@@ -160,6 +160,14 @@ Run and record results for the checks that are applicable to the change:
 If any validation cannot be run locally, document the exact reason in the task
 file, WORKLOG, and final report.
 
+> **2026-06-13 audit run:** items 1–4 and shell `bash -n`/`zsh -n` were executed
+> and passed; an isolated real-GPG e2e (init/import/create/list/current/env/use/
+> exec/edit/export[+--decrypt]/restore[--dry-run and real]/unlock/rename/delete/
+> cleanup) was run against a throwaway key in a temporary `GNUPGHOME`. Decrypted
+> activation files were confirmed `0600` inside a `0700` runtime dir. `fish -n`
+> and `golangci-lint` were skipped (tools not installed). The non-Linux
+> `/dev/fd/3` exec path was not exercised (Linux host).
+
 ## Git rules
 
 - `.agent/` is in `.gitignore` — never commit it.
