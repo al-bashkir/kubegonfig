@@ -29,7 +29,7 @@ and store it as a named profile.`,
 
 func init() {
 	importCmd.Flags().StringVar(&importFrom, "from", "", "path to kubeconfig file (required)")
-	if err := importCmd.MarkFlagRequired("from"); err != nil {
-		panic(err)
-	}
+	// MarkFlagRequired only errors if the flag is unregistered, which cannot
+	// happen here since it is defined on the line above.
+	_ = importCmd.MarkFlagRequired("from")
 }

@@ -13,6 +13,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// completeProfileNames loads config and the profile manager directly rather
+// than reusing the package globals: cobra runs completion in a separate
+// __complete invocation where PersistentPreRunE has not run, so cfg/mgr are nil.
 func completeProfileNames(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	if len(args) > 0 {
 		return nil, cobra.ShellCompDirectiveNoFileComp
