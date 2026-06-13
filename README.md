@@ -53,7 +53,7 @@ kubegonfig exec staging -- kubectl get pods
 
 ## Shell integration
 
-Source the appropriate wrapper in your shell rc file. This lets `use` and `env` subcommands export `KUBECONFIG` into your current shell session without wrapping them in `eval` manually. The bash/zsh wrappers request POSIX shell output by default; the fish wrapper requests fish output. The wrappers also recognize global `--quiet` / `-q` before `use` or `env`.
+Source the appropriate wrapper in your shell rc file. This lets `use` and `env` subcommands export `KUBECONFIG` into your current shell session without wrapping them in `eval` manually. The bash/zsh wrappers request POSIX shell output by default (passing `--shell posix`); the fish wrapper requests fish output (passing `--shell fish`). The wrappers also recognize global `--quiet` / `-q` before `use` or `env`.
 
 ### Bash
 
@@ -76,7 +76,7 @@ source /path/to/kubegonfig/shell/kubegonfig.zsh
 source /path/to/kubegonfig/shell/kubegonfig.fish
 ```
 
-Without the wrapper, use `eval` or `source` directly:
+To invoke manually without the wrapper function, use `eval` or `source` directly:
 
 ```bash
 eval "$(kubegonfig env my-cluster)"
