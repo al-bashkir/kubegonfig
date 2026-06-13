@@ -6,6 +6,7 @@ kubegonfig
 # development and must NOT appear in version control.
 .agent/
 .plan/
+docs/superpowers/
 
 # graphify local/heavy artifacts. Keep graphify-out/ itself commit-friendly,
 # but skip machine-local cache, mtime manifest, and token cost tracking.
