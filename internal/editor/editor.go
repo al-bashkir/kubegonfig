@@ -11,6 +11,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"kubegonfig/internal/storage"
 )
 
 // fallbackEditors is the ordered list of editors to try when no editor is configured.
@@ -42,18 +44,22 @@ func Edit(initialContent []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	// Create temp file in a private directory.
-	tmpDir, err := os.MkdirTemp("", "kubegonfig-edit-*")
+	// Create the temp file in the app-owned runtime dir (0700) so decrypted
+	// plaintext never lands in shared /tmp. MkdirTemp creates the dir 0700.
+	runtimeDir, err := storage.RuntimeDir()
+	if err != nil {
+		return nil, fmt.Errorf("resolve runtime dir: %w", err)
+	}
+	if err := storage.EnsureDir(runtimeDir, 0700); err != nil {
+		return nil, fmt.Errorf("create runtime dir: %w", err)
+	}
+	tmpDir, err := os.MkdirTemp(runtimeDir, "kubegonfig-edit-*")
 	if err != nil {
 		return nil, fmt.Errorf("create temp dir: %w", err)
 	}
 	defer func() {
 		_ = os.RemoveAll(tmpDir)
 	}()
-
-	if err := os.Chmod(tmpDir, 0700); err != nil {
-		return nil, fmt.Errorf("chmod temp dir: %w", err)
-	}
 
 	tmpFile := filepath.Join(tmpDir, "kubeconfig.yaml")
 	if err := os.WriteFile(tmpFile, initialContent, 0600); err != nil {

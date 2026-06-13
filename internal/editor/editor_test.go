@@ -4,7 +4,10 @@
 package editor
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -60,5 +63,36 @@ func TestSplitCommandLine(t *testing.T) {
 func TestSplitCommandLineRejectsUnterminatedQuote(t *testing.T) {
 	if _, err := splitCommandLine(`code "unterminated`); err == nil {
 		t.Fatal("splitCommandLine() error = nil, want unterminated quote error")
+	}
+}
+
+func TestEditWritesTempUnderRuntimeDir(t *testing.T) {
+	runtime := t.TempDir()
+	t.Setenv("XDG_RUNTIME_DIR", runtime)
+
+	// Fake editor records the path it was handed and leaves the file unchanged.
+	recordPath := filepath.Join(t.TempDir(), "edited-path")
+	script := "#!/bin/sh\nprintf '%s' \"$1\" > " + recordPath + "\n"
+	editorPath := filepath.Join(t.TempDir(), "fake-editor")
+	if err := os.WriteFile(editorPath, []byte(script), 0700); err != nil {
+		t.Fatalf("write fake editor: %v", err)
+	}
+	t.Setenv("VISUAL", editorPath)
+
+	out, err := Edit([]byte("hello"))
+	if err != nil {
+		t.Fatalf("Edit() error: %v", err)
+	}
+	if string(out) != "hello" {
+		t.Fatalf("Edit() content = %q, want %q", out, "hello")
+	}
+
+	got, err := os.ReadFile(recordPath)
+	if err != nil {
+		t.Fatalf("read recorded path: %v", err)
+	}
+	wantPrefix := filepath.Join(runtime, "kubegonfig") + string(os.PathSeparator)
+	if !strings.HasPrefix(string(got), wantPrefix) {
+		t.Fatalf("edit temp path = %q, want under %q", got, wantPrefix)
 	}
 }
