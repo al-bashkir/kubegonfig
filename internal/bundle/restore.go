@@ -19,6 +19,7 @@ import (
 	"kubegonfig/internal/crypto"
 	"kubegonfig/internal/kubeconfig"
 	"kubegonfig/internal/profile"
+	"kubegonfig/internal/storage"
 
 	"gopkg.in/yaml.v3"
 )
@@ -58,7 +59,14 @@ func Restore(mgr *profile.Manager, cfg *config.Config, opts RestoreOptions) (Res
 		return plan, fmt.Errorf("Restore: --force and --skip-existing are mutually exclusive")
 	}
 
-	tmp, err := os.CreateTemp("", "kubegonfig-restore-*")
+	runtimeDir, err := storage.RuntimeDir()
+	if err != nil {
+		return plan, fmt.Errorf("resolve runtime dir: %w", err)
+	}
+	if err := storage.EnsureDir(runtimeDir, 0700); err != nil {
+		return plan, fmt.Errorf("create runtime dir: %w", err)
+	}
+	tmp, err := os.CreateTemp(runtimeDir, "kubegonfig-restore-*")
 	if err != nil {
 		return plan, fmt.Errorf("create restore tempfile: %w", err)
 	}
