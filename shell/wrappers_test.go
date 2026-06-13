@@ -314,7 +314,7 @@ func writeStubKubegonfig(t *testing.T) string {
 	stubPath := filepath.Join(stubDir, "kubegonfig")
 	stub := `#!/bin/sh
 printf '%s\n' "$*" >> "$KUBEGONFIG_STUB_ARGS"
-if [ "${KUBECONFIG_STUB_OUTPUT:-posix}" = fish ]; then
+if [ "${KUBEGONFIG_STUB_OUTPUT:-posix}" = fish ]; then
     printf '%s\n' 'set -gx KUBECONFIG evalled'
 else
     printf '%s\n' 'KUBECONFIG=evalled' 'export KUBECONFIG'
