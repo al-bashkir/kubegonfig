@@ -384,40 +384,6 @@ func ReadDirInDir(dirPath string) ([]os.DirEntry, error) {
 	return dir.ReadDir(-1)
 }
 
-// FileExistsInDir checks for a regular file inside a verified non-symlink directory.
-func FileExistsInDir(dirPath, name string) (bool, error) {
-	if err := validateRelativeFileName(name); err != nil {
-		return false, err
-	}
-	dir, err := openVerifiedDir(dirPath)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return false, nil
-		}
-		return false, err
-	}
-	defer func() {
-		_ = dir.Close()
-	}()
-
-	fd, err := unix.Openat(int(dir.Fd()), name, unix.O_RDONLY|unix.O_NONBLOCK|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return false, nil
-		}
-		return false, fmt.Errorf("open %s: %w", filepath.Join(dirPath, name), err)
-	}
-	f := os.NewFile(uintptr(fd), filepath.Join(dirPath, name))
-	defer func() {
-		_ = f.Close()
-	}()
-	info, err := f.Stat()
-	if err != nil {
-		return false, fmt.Errorf("stat %s: %w", filepath.Join(dirPath, name), err)
-	}
-	return info.Mode().IsRegular(), nil
-}
-
 // RegularFileInDir checks a file entry without following symlinks.
 func RegularFileInDir(dirPath, name string) (bool, error) {
 	if err := validateRelativeFileName(name); err != nil {

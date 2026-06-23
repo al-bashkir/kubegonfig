@@ -28,7 +28,10 @@ simultaneously, for example to merge them via:
 Successfully unlocked profiles are reported one per line on stderr
 (suppressed by --quiet). The active profile, as reported by
 "kubegonfig current", is not modified.`,
-	ValidArgsFunction: completeUnlockProfileNames,
+	// Pass nil args so names keep completing for every variadic position.
+	ValidArgsFunction: func(cmd *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return completeProfileNames(cmd, nil, toComplete)
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if len(args) == 0 {
 			return cmd.Help()
@@ -62,8 +65,4 @@ func runUnlock(args []string) error {
 	}
 
 	return errors.Join(errs...)
-}
-
-func completeUnlockProfileNames(cmd *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	return completeProfileNames(cmd, nil, toComplete)
 }

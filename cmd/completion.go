@@ -47,13 +47,6 @@ func completeProfileNames(_ *cobra.Command, args []string, toComplete string) ([
 	return completions, cobra.ShellCompDirectiveNoFileComp
 }
 
-func completeRenameOldProfile(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	if len(args) > 0 {
-		return nil, cobra.ShellCompDirectiveNoFileComp
-	}
-	return completeProfileNames(cmd, args, toComplete)
-}
-
 func completeExecProfileName(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	if len(args) > 0 {
 		return nil, cobra.ShellCompDirectiveDefault

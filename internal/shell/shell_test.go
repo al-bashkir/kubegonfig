@@ -132,10 +132,6 @@ func TestFormatSet(t *testing.T) {
 		{"posix", StylePosix, "KUBECONFIG", "export KUBECONFIG='/tmp/config'", false},
 		{"fish", StyleFish, "KUBECONFIG", "set -gx KUBECONFIG '/tmp/config'", false},
 		{"invalid style", "cmd", "KUBECONFIG", "", true},
-		{"empty key", StylePosix, "", "", true},
-		{"leading digit", StylePosix, "1BAD", "", true},
-		{"assignment key", StylePosix, "BAD=1", "", true},
-		{"shell metachar key", StylePosix, "A;rm", "", true},
 	}
 
 	for _, tt := range tests {

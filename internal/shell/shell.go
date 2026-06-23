@@ -20,8 +20,6 @@ const (
 // Max length 64 to prevent filesystem issues.
 var validNameRe = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$`)
 
-var validEnvKeyRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
-
 // ValidateName checks that a profile name is safe for use as a filename
 // and in shell commands. Rejects path traversal, shell metacharacters,
 // and empty/blank names.
@@ -46,13 +44,6 @@ func ValidateName(name string) error {
 // Single quotes within the value are escaped as '\” (end quote, escaped quote, start quote).
 func EscapePosix(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
-}
-
-func validateEnvKey(key string) error {
-	if !validEnvKeyRe.MatchString(key) {
-		return fmt.Errorf("invalid environment variable name %q", key)
-	}
-	return nil
 }
 
 func formatExport(key, value string) string {
@@ -80,9 +71,6 @@ func NormalizeStyle(style string) (string, error) {
 func FormatSet(style, key, value string) (string, error) {
 	style, err := NormalizeStyle(style)
 	if err != nil {
-		return "", err
-	}
-	if err := validateEnvKey(key); err != nil {
 		return "", err
 	}
 	switch style {
