@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
 )
 
@@ -104,53 +103,20 @@ func TestEncrypt_NoRecipients(t *testing.T) {
 	}
 }
 
-func TestNormalizeRecipients(t *testing.T) {
-	got := normalizeRecipients([]string{" user@example.com ", "", "second@example.com", "user@example.com", "\t"})
+func TestNonBlank(t *testing.T) {
+	got := nonBlank([]string{"user@example.com", "", "second@example.com", "\t"})
 	want := []string{"user@example.com", "second@example.com"}
 	if len(got) != len(want) {
-		t.Fatalf("normalizeRecipients() len = %d, want %d: %v", len(got), len(want), got)
+		t.Fatalf("nonBlank() len = %d, want %d: %v", len(got), len(want), got)
 	}
 	for i := range want {
 		if got[i] != want[i] {
-			t.Fatalf("normalizeRecipients()[%d] = %q, want %q", i, got[i], want[i])
+			t.Fatalf("nonBlank()[%d] = %q, want %q", i, got[i], want[i])
 		}
 	}
 }
 
-func TestGPGPathReresolvesMissingCachedBinary(t *testing.T) {
-	setCachedGPGForTest(t, "")
-
-	oldDir := t.TempDir()
-	oldPath := filepath.Join(oldDir, "gpg2")
-	if err := os.WriteFile(oldPath, []byte("#!/bin/sh\n"), 0700); err != nil {
-		t.Fatalf("write old gpg: %v", err)
-	}
-	gpgMu.Lock()
-	gpgBinary = oldPath
-	gpgMu.Unlock()
-	if err := os.Remove(oldPath); err != nil {
-		t.Fatalf("remove old gpg: %v", err)
-	}
-
-	newDir := t.TempDir()
-	newPath := filepath.Join(newDir, "gpg2")
-	if err := os.WriteFile(newPath, []byte("#!/bin/sh\n"), 0700); err != nil {
-		t.Fatalf("write new gpg: %v", err)
-	}
-	t.Setenv("PATH", newDir)
-
-	got, err := gpgPath()
-	if err != nil {
-		t.Fatalf("gpgPath() error = %v", err)
-	}
-	if got != newPath {
-		t.Fatalf("gpgPath() = %q, want %q", got, newPath)
-	}
-}
-
-func TestGPGPathConcurrentCacheAccess(t *testing.T) {
-	setCachedGPGForTest(t, "")
-
+func TestLookupGPGResolvesFromPath(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "gpg2")
 	if err := os.WriteFile(path, []byte("#!/bin/sh\n"), 0700); err != nil {
@@ -158,42 +124,11 @@ func TestGPGPathConcurrentCacheAccess(t *testing.T) {
 	}
 	t.Setenv("PATH", dir)
 
-	var wg sync.WaitGroup
-	for i := 0; i < 20; i++ {
-		wg.Add(2)
-		go func() {
-			defer wg.Done()
-			if err := CheckGPG(); err != nil {
-				t.Errorf("CheckGPG() error = %v", err)
-			}
-		}()
-		go func() {
-			defer wg.Done()
-			got, err := gpgPath()
-			if err != nil {
-				t.Errorf("gpgPath() error = %v", err)
-				return
-			}
-			if got != path {
-				t.Errorf("gpgPath() = %q, want %q", got, path)
-			}
-		}()
+	got, err := lookupGPG()
+	if err != nil {
+		t.Fatalf("lookupGPG() error = %v", err)
 	}
-	wg.Wait()
-}
-
-func setCachedGPGForTest(t *testing.T, path string) string {
-	t.Helper()
-
-	var oldBinary string
-	gpgMu.Lock()
-	oldBinary = gpgBinary
-	gpgBinary = path
-	gpgMu.Unlock()
-	t.Cleanup(func() {
-		gpgMu.Lock()
-		gpgBinary = oldBinary
-		gpgMu.Unlock()
-	})
-	return oldBinary
+	if got != path {
+		t.Fatalf("lookupGPG() = %q, want %q", got, path)
+	}
 }

@@ -66,10 +66,9 @@ func Edit(initialContent []byte) ([]byte, error) {
 		return nil, fmt.Errorf("write temp file: %w", err)
 	}
 
-	parts, err := splitCommandLine(editorCmd)
-	if err != nil {
-		return nil, fmt.Errorf("parse editor command: %w", err)
-	}
+	// ponytail: split on whitespace. Drops support for $EDITOR paths with
+	// spaces or embedded quotes; restore a shell-word parser if that's needed.
+	parts := strings.Fields(editorCmd)
 	if len(parts) == 0 {
 		return nil, fmt.Errorf("empty editor command")
 	}
@@ -90,51 +89,4 @@ func Edit(initialContent []byte) ([]byte, error) {
 	}
 
 	return content, nil
-}
-
-func splitCommandLine(s string) ([]string, error) {
-	var parts []string
-	var b strings.Builder
-	inSingle := false
-	inDouble := false
-	escaped := false
-	hasPart := false
-
-	for _, r := range s {
-		switch {
-		case escaped:
-			b.WriteRune(r)
-			escaped = false
-			hasPart = true
-		case r == '\\' && !inSingle:
-			escaped = true
-			hasPart = true
-		case r == '\'' && !inDouble:
-			inSingle = !inSingle
-			hasPart = true
-		case r == '"' && !inSingle:
-			inDouble = !inDouble
-			hasPart = true
-		case (r == ' ' || r == '\t' || r == '\n') && !inSingle && !inDouble:
-			if hasPart {
-				parts = append(parts, b.String())
-				b.Reset()
-				hasPart = false
-			}
-		default:
-			b.WriteRune(r)
-			hasPart = true
-		}
-	}
-
-	if escaped {
-		return nil, fmt.Errorf("unfinished escape")
-	}
-	if inSingle || inDouble {
-		return nil, fmt.Errorf("unterminated quote")
-	}
-	if hasPart {
-		parts = append(parts, b.String())
-	}
-	return parts, nil
 }
