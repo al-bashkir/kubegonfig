@@ -162,11 +162,9 @@ func (m *Manager) List() ([]string, error) {
 		if err := shell.ValidateName(name); err != nil {
 			continue
 		}
-		exists, err := storage.RegularFileInDir(dir, e.Name())
-		if err != nil {
-			return nil, fmt.Errorf("check profile %q: %w", name, err)
-		}
-		if !exists {
+		// ponytail: trust readdir d_type; skips a stat per entry. Misses files
+		// on DT_UNKNOWN filesystems (some FUSE) — re-add RegularFileInDir there.
+		if !e.Type().IsRegular() {
 			continue
 		}
 		names = append(names, name)
@@ -505,7 +503,7 @@ func (m *Manager) rollbackRenameAfterCurrentFailure(oldName, newName string, upd
 }
 
 func (m *Manager) profileExists(name string) (bool, error) {
-	return storage.FileExistsInDir(m.profilesPath(), profileFileName(name))
+	return storage.RegularFileInDir(m.profilesPath(), profileFileName(name))
 }
 
 // Exists reports whether a profile with the given name is stored locally.

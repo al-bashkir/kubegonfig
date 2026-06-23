@@ -8,10 +8,8 @@ package crypto
 import (
 	"bytes"
 	"fmt"
-	"os"
 	"os/exec"
 	"strings"
-	"sync"
 )
 
 const (
@@ -19,24 +17,14 @@ const (
 	maxGPGErrorLen     = 800
 )
 
-// gpgBinary caches the resolved path to the gpg executable.
-var (
-	gpgMu     sync.Mutex
-	gpgBinary string
-)
-
 // CheckGPG verifies that a usable gpg binary exists in PATH.
 func CheckGPG() error {
-	path, err := lookupGPG()
-	if err != nil {
-		return err
-	}
-	gpgMu.Lock()
-	gpgBinary = path
-	gpgMu.Unlock()
-	return nil
+	_, err := lookupGPG()
+	return err
 }
 
+// lookupGPG resolves the gpg binary in PATH. exec.LookPath is cheap and runs a
+// handful of times per short-lived CLI invocation, so the result is not cached.
 func lookupGPG() (string, error) {
 	for _, name := range []string{"gpg2", "gpg"} {
 		path, err := exec.LookPath(name)
@@ -47,34 +35,16 @@ func lookupGPG() (string, error) {
 	return "", fmt.Errorf("gpg not found in PATH; install GnuPG to use kubegonfig")
 }
 
-// gpgPath returns the resolved gpg binary path, calling CheckGPG if needed.
-func gpgPath() (string, error) {
-	gpgMu.Lock()
-	defer gpgMu.Unlock()
-
-	if gpgBinary != "" {
-		if _, err := os.Stat(gpgBinary); err == nil {
-			return gpgBinary, nil
-		}
-		gpgBinary = ""
-	}
-	path, err := lookupGPG()
-	if err != nil {
-		return "", err
-	}
-	gpgBinary = path
-	return gpgBinary, nil
-}
-
-// Encrypt encrypts data for the given recipients using GPG.
-// At least one recipient must be specified.
+// Encrypt encrypts data for the given recipients using GPG. At least one
+// non-blank recipient must be specified; callers (config.Recipients) already
+// trim and deduplicate. Blank entries are dropped here as a fail-closed guard.
 func Encrypt(data []byte, recipients []string) ([]byte, error) {
-	recipients = normalizeRecipients(recipients)
+	recipients = nonBlank(recipients)
 	if len(recipients) == 0 {
 		return nil, fmt.Errorf("at least one GPG recipient is required")
 	}
 
-	bin, err := gpgPath()
+	bin, err := lookupGPG()
 	if err != nil {
 		return nil, err
 	}
@@ -104,26 +74,19 @@ func Encrypt(data []byte, recipients []string) ([]byte, error) {
 	return stdout.Bytes(), nil
 }
 
-func normalizeRecipients(recipients []string) []string {
-	normalized := make([]string, 0, len(recipients))
-	seen := make(map[string]struct{}, len(recipients))
-	for _, recipient := range recipients {
-		recipient = strings.TrimSpace(recipient)
-		if recipient == "" {
-			continue
+func nonBlank(recipients []string) []string {
+	out := make([]string, 0, len(recipients))
+	for _, r := range recipients {
+		if strings.TrimSpace(r) != "" {
+			out = append(out, r)
 		}
-		if _, ok := seen[recipient]; ok {
-			continue
-		}
-		seen[recipient] = struct{}{}
-		normalized = append(normalized, recipient)
 	}
-	return normalized
+	return out
 }
 
 // Decrypt decrypts GPG-encrypted data. Relies on gpg-agent for passphrase.
 func Decrypt(data []byte) ([]byte, error) {
-	bin, err := gpgPath()
+	bin, err := lookupGPG()
 	if err != nil {
 		return nil, err
 	}
@@ -156,7 +119,7 @@ type GPGKey struct {
 
 // ListSecretKeys returns all secret keys available in the GPG keyring.
 func ListSecretKeys() ([]GPGKey, error) {
-	bin, err := gpgPath()
+	bin, err := lookupGPG()
 	if err != nil {
 		return nil, err
 	}
