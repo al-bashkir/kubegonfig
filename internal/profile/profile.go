@@ -80,30 +80,13 @@ func (m *Manager) profileMtime(name string) (time.Time, error) {
 	return mtime, nil
 }
 
-func (m *Manager) writeCurrent(name string) error {
+func (m *Manager) setCurrent(name string) error {
 	return storage.AtomicWriteInDir(m.statePath(), currentFile, []byte(name+"\n"), 0600)
 }
 
-func (m *Manager) readCurrent() ([]byte, error) {
-	return storage.ReadFileInDir(m.statePath(), currentFile)
-}
-
 // WithLock executes fn while holding an exclusive file lock.
-func (m *Manager) WithLock(fn func() error) (err error) {
-	lock, err := storage.NewFileLock(m.lockPath())
-	if err != nil {
-		return fmt.Errorf("create lock: %w", err)
-	}
-	if err := lock.Lock(); err != nil {
-		return fmt.Errorf("acquire lock: %w", err)
-	}
-	defer func() {
-		if unlockErr := lock.Unlock(); unlockErr != nil {
-			err = errors.Join(err, fmt.Errorf("release lock: %w", unlockErr))
-		}
-	}()
-
-	return fn()
+func (m *Manager) WithLock(fn func() error) error {
+	return storage.WithLock(m.lockPath(), fn)
 }
 
 // Create validates, encrypts, and stores a new profile.
@@ -229,9 +212,6 @@ func (m *Manager) Edit(name string, edit func([]byte) ([]byte, error)) (changed 
 	if err := shell.ValidateName(name); err != nil {
 		return false, err
 	}
-	if edit == nil {
-		return false, fmt.Errorf("edit callback must not be nil")
-	}
 
 	err = m.WithLock(func() error {
 		original, err := m.decryptProfile(name)
@@ -293,12 +273,6 @@ func (m *Manager) Activate(
 	if err := shell.ValidateName(name); err != nil {
 		return "", err
 	}
-	if probe == nil {
-		return "", fmt.Errorf("probe callback must not be nil")
-	}
-	if create == nil {
-		return "", fmt.Errorf("activation callback must not be nil")
-	}
 
 	err = m.WithLock(func() error {
 		cipherMtime, err := m.profileMtime(name)
@@ -345,9 +319,6 @@ func (m *Manager) Unlock(name string, create func([]byte) (string, error)) (path
 	if err := shell.ValidateName(name); err != nil {
 		return "", err
 	}
-	if create == nil {
-		return "", fmt.Errorf("activation callback must not be nil")
-	}
 
 	err = m.WithLock(func() error {
 		data, err := m.decryptProfile(name)
@@ -374,51 +345,20 @@ func (m *Manager) Delete(name string) error {
 		if !exists {
 			return fmt.Errorf("profile %q not found", name)
 		}
-
-		// Clear current if this profile is active.
 		current, err := m.GetCurrent()
 		if err != nil {
 			return fmt.Errorf("read current profile: %w", err)
 		}
-		currentCleared := false
+
+		// Clear current first: a failure there leaves the profile intact.
+		// ponytail: no rollback. If the profile delete then fails, the profile
+		// stays but is no longer current; re-run `use` to reactivate it.
 		if current == name {
 			if err := storage.RemoveFileInDir(m.statePath(), currentFile); err != nil {
-				if storage.IsPostCommitError(err) {
-					if restoreErr := m.setCurrent(name); restoreErr != nil {
-						return errors.Join(
-							fmt.Errorf("clear current profile: %w", err),
-							fmt.Errorf("restore current profile: %w", restoreErr),
-						)
-					}
-				}
 				return fmt.Errorf("clear current profile: %w", err)
 			}
-			currentCleared = true
 		}
-
 		if err := storage.RemoveFileInDir(m.profilesPath(), profileFileName(name)); err != nil {
-			if currentCleared {
-				exists, existsErr := m.profileExists(name)
-				if existsErr != nil {
-					return errors.Join(
-						fmt.Errorf("delete profile: %w", err),
-						fmt.Errorf("check profile after failed delete: %w", existsErr),
-					)
-				}
-				if exists {
-					if restoreErr := m.setCurrent(name); restoreErr != nil {
-						return errors.Join(
-							fmt.Errorf("delete profile: %w", err),
-							fmt.Errorf("restore current profile: %w", restoreErr),
-						)
-					}
-				} else {
-					return errors.Join(
-						fmt.Errorf("delete profile: %w", err),
-						fmt.Errorf("profile %q may have been removed before the delete error was reported", name),
-					)
-				}
-			}
 			return fmt.Errorf("delete profile: %w", err)
 		}
 		return nil
@@ -454,52 +394,18 @@ func (m *Manager) Rename(oldName, newName string) error {
 			return fmt.Errorf("read current profile: %w", err)
 		}
 
-		renameErr := storage.RenameFileInDir(m.profilesPath(), profileFileName(oldName), profileFileName(newName))
-		if renameErr != nil && !storage.IsPostCommitError(renameErr) {
-			return fmt.Errorf("rename: %w", renameErr)
+		// ponytail: no rollback. If updating current fails after the rename,
+		// current keeps the old name until the next `use`.
+		if err := storage.RenameFileInDir(m.profilesPath(), profileFileName(oldName), profileFileName(newName)); err != nil {
+			return fmt.Errorf("rename: %w", err)
 		}
-
-		// Update current pointer if needed.
 		if current == oldName {
 			if err := m.setCurrent(newName); err != nil {
-				if renameErr != nil {
-					return errors.Join(fmt.Errorf("rename: %w", renameErr), m.rollbackRenameAfterCurrentFailure(oldName, newName, err))
-				}
-				return m.rollbackRenameAfterCurrentFailure(oldName, newName, err)
+				return fmt.Errorf("update current profile: %w", err)
 			}
-		}
-		if renameErr != nil {
-			return fmt.Errorf("rename: %w", renameErr)
 		}
 		return nil
 	})
-}
-
-func (m *Manager) rollbackRenameAfterCurrentFailure(oldName, newName string, updateErr error) error {
-	errs := []error{fmt.Errorf("update current profile: %w", updateErr)}
-	rolledBack := true
-	if rollbackErr := storage.RenameFileInDir(m.profilesPath(), profileFileName(newName), profileFileName(oldName)); rollbackErr != nil {
-		rolledBack = false
-		errs = append(errs, fmt.Errorf("rollback rename: %w", rollbackErr))
-	}
-	if !rolledBack {
-		exists, existsErr := m.profileExists(oldName)
-		if existsErr != nil {
-			errs = append(errs, fmt.Errorf("check old profile after failed rollback: %w", existsErr))
-		}
-		rolledBack = exists
-	}
-	current, err := m.GetCurrent()
-	if err != nil {
-		errs = append(errs, fmt.Errorf("read current after failed update: %w", err))
-	} else if current != oldName && rolledBack {
-		if restoreErr := m.setCurrent(oldName); restoreErr != nil {
-			errs = append(errs, fmt.Errorf("restore current profile: %w", restoreErr))
-		}
-	} else if current != oldName {
-		errs = append(errs, fmt.Errorf("current profile may still point to %q because profile rollback did not restore %q", current, oldName))
-	}
-	return errors.Join(errs...)
 }
 
 func (m *Manager) profileExists(name string) (bool, error) {
@@ -514,14 +420,10 @@ func (m *Manager) Exists(name string) (bool, error) {
 	return m.profileExists(name)
 }
 
-func (m *Manager) setCurrent(name string) error {
-	return m.writeCurrent(name)
-}
-
 // GetCurrent returns the name of the currently active profile.
 // Returns empty string and nil error if no profile is active.
 func (m *Manager) GetCurrent() (string, error) {
-	data, err := m.readCurrent()
+	data, err := storage.ReadFileInDir(m.statePath(), currentFile)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return "", nil

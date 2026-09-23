@@ -3,41 +3,28 @@
 
 // Package tmpfile manages the lifecycle of temporary decrypted kubeconfig
 // files. Files are created in a secure runtime directory with restricted
-// permissions and can be cleaned up explicitly or on handled signals.
+// permissions; the explicit cleanup command removes stale ones.
 package tmpfile
 
 import (
 	"fmt"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"strings"
-	"sync"
-	"syscall"
 	"time"
 
 	"kubegonfig/internal/shell"
 	"kubegonfig/internal/storage"
 )
 
-var (
-	// tracked holds paths of temp files created in this process.
-	tracked   []string
-	trackedMu sync.Mutex
-)
-
 // Create writes decrypted data to a temp file in the secure runtime dir.
 // Returns the absolute path to the created file.
-// The file is registered for cleanup on handled signals and CleanupAll.
 func Create(name string, data []byte) (string, error) {
 	if err := shell.ValidateName(name); err != nil {
 		return "", err
 	}
 
-	dir, err := storage.RuntimeDir()
-	if err != nil {
-		return "", fmt.Errorf("resolve runtime dir: %w", err)
-	}
+	dir := storage.RuntimeDir()
 	if err := storage.EnsureDir(dir, 0700); err != nil {
 		return "", fmt.Errorf("create runtime dir: %w", err)
 	}
@@ -48,28 +35,18 @@ func Create(name string, data []byte) (string, error) {
 	if err := storage.AtomicWrite(path, data, 0600); err != nil {
 		return "", fmt.Errorf("write temp kubeconfig: %w", err)
 	}
-
-	trackedMu.Lock()
-	tracked = append(tracked, path)
-	trackedMu.Unlock()
-
 	return path, nil
 }
 
 // ProbeCached reports whether the plaintext activation file for name is fresh
 // enough to reuse. A cache hit requires a regular file in the runtime dir with
-// modification time strictly greater than cipherMtime. On a hit the file is
-// NOT added to the tracked-for-cleanup list: another shell may already depend
-// on the path through an earlier eval'd `kubegonfig use`.
+// modification time strictly greater than cipherMtime.
 func ProbeCached(name string, cipherMtime time.Time) (string, bool, error) {
 	if err := shell.ValidateName(name); err != nil {
 		return "", false, err
 	}
 
-	dir, err := storage.RuntimeDir()
-	if err != nil {
-		return "", false, fmt.Errorf("resolve runtime dir: %w", err)
-	}
+	dir := storage.RuntimeDir()
 	fileName := name + ".yaml"
 	path := filepath.Join(dir, fileName)
 
@@ -77,13 +54,7 @@ func ProbeCached(name string, cipherMtime time.Time) (string, bool, error) {
 	if err != nil {
 		return path, false, err
 	}
-	if !ok {
-		return path, false, nil
-	}
-	if !mtime.After(cipherMtime) {
-		return path, false, nil
-	}
-	return path, true, nil
+	return path, ok && mtime.After(cipherMtime), nil
 }
 
 // OpenUnlinked writes decrypted data to an open temp file and immediately
@@ -94,11 +65,7 @@ func OpenUnlinked(name string, data []byte) (*os.File, error) {
 		return nil, err
 	}
 
-	dir, err := storage.RuntimeDir()
-	if err != nil {
-		return nil, fmt.Errorf("resolve runtime dir: %w", err)
-	}
-	tmp, err := storage.OpenUnlinkedTempFileInDir(dir, name+"-", ".yaml", data, 0600)
+	tmp, err := storage.OpenUnlinkedTempFileInDir(storage.RuntimeDir(), name+"-", ".yaml", data, 0600)
 	if err != nil {
 		return nil, fmt.Errorf("create unlinked temp kubeconfig: %w", err)
 	}
@@ -111,33 +78,13 @@ func Remove(path string) error {
 	if err != nil {
 		return err
 	}
-	if err := storage.RemoveFileInDir(dir, name); err != nil {
-		return err
-	}
-	untrack(path)
-	return nil
-}
-
-// CleanupAll removes all temp files created by this process.
-func CleanupAll() {
-	trackedMu.Lock()
-	paths := make([]string, len(tracked))
-	copy(paths, tracked)
-	trackedMu.Unlock()
-
-	for _, p := range paths {
-		_ = Remove(p)
-	}
+	return storage.RemoveFileInDir(dir, name)
 }
 
 // CleanupStale removes stale kubegonfig kubeconfig temp files from the runtime directory.
 // Used by the explicit "cleanup" command.
 func CleanupStale() (int, error) {
-	dir, err := storage.RuntimeDir()
-	if err != nil {
-		return 0, fmt.Errorf("resolve runtime dir: %w", err)
-	}
-
+	dir := storage.RuntimeDir()
 	entries, err := storage.ReadDirInDir(dir)
 	if err != nil {
 		return 0, fmt.Errorf("read runtime dir: %w", err)
@@ -169,10 +116,7 @@ func isKubeconfigTempName(name string) bool {
 }
 
 func runtimeTempPathParts(path string) (string, string, error) {
-	dir, err := storage.RuntimeDir()
-	if err != nil {
-		return "", "", fmt.Errorf("resolve runtime dir: %w", err)
-	}
+	dir := storage.RuntimeDir()
 	absDir, err := filepath.Abs(dir)
 	if err != nil {
 		return "", "", fmt.Errorf("resolve runtime dir path: %w", err)
@@ -186,28 +130,4 @@ func runtimeTempPathParts(path string) (string, string, error) {
 		return "", "", fmt.Errorf("refusing to remove non-kubegonfig runtime temp file %q", path)
 	}
 	return dir, name, nil
-}
-
-func untrack(path string) {
-	trackedMu.Lock()
-	defer trackedMu.Unlock()
-
-	for i, trackedPath := range tracked {
-		if trackedPath == path {
-			tracked = append(tracked[:i], tracked[i+1:]...)
-			return
-		}
-	}
-}
-
-// SetupSignalHandler registers cleanup on SIGINT and SIGTERM.
-// Call once at program startup.
-func SetupSignalHandler() {
-	ch := make(chan os.Signal, 1)
-	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		<-ch
-		CleanupAll()
-		os.Exit(1)
-	}()
 }

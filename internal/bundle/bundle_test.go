@@ -17,6 +17,8 @@ import (
 
 	"kubegonfig/internal/config"
 	"kubegonfig/internal/profile"
+
+	"gopkg.in/yaml.v3"
 )
 
 // newSeededManager builds a profile.Manager whose store contains the given
@@ -75,9 +77,9 @@ func TestManifest_RoundTrip(t *testing.T) {
 		ConfigIncluded: true,
 	}
 
-	encoded, err := MarshalManifest(&want)
+	encoded, err := yaml.Marshal(&want)
 	if err != nil {
-		t.Fatalf("MarshalManifest() error: %v", err)
+		t.Fatalf("yaml.Marshal() error: %v", err)
 	}
 
 	got, err := ParseManifest(encoded)
@@ -647,7 +649,7 @@ func TestRestore_RejectsManifestNotFirst(t *testing.T) {
 	body := []byte("a")
 	_ = tw.WriteHeader(&tar.Header{Name: ProfilesDir + "alpha" + EncryptedExt, Mode: 0600, Size: int64(len(body))})
 	_, _ = tw.Write(body)
-	manifestBody, _ := MarshalManifest(&Manifest{
+	manifestBody, _ := yaml.Marshal(&Manifest{
 		SchemaVersion: 1, CreatedAt: time.Now().UTC(), KubegonfigVersion: "0.2.0",
 		Encrypted: true, ProfileCount: 1,
 		Profiles: []ManifestProfile{{Name: "alpha", File: ProfilesDir + "alpha" + EncryptedExt}},
@@ -666,7 +668,7 @@ func TestRestore_RejectsManifestNotFirst(t *testing.T) {
 func TestRestore_RejectsPathTraversal(t *testing.T) {
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
-	manifestBody, _ := MarshalManifest(&Manifest{
+	manifestBody, _ := yaml.Marshal(&Manifest{
 		SchemaVersion: 1, CreatedAt: time.Now().UTC(), KubegonfigVersion: "0.2.0",
 		Encrypted: true, ProfileCount: 0, Profiles: nil,
 	})
@@ -847,7 +849,7 @@ func TestRestore_PlaintextArchiveRejectsInvalidKubeconfig(t *testing.T) {
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
 	now := time.Now().UTC().Truncate(time.Second)
-	manifestBody, _ := MarshalManifest(&Manifest{
+	manifestBody, _ := yaml.Marshal(&Manifest{
 		SchemaVersion: 1, CreatedAt: now, KubegonfigVersion: "0.2.0",
 		Encrypted: false, ProfileCount: 1,
 		Profiles: []ManifestProfile{{Name: "alpha", File: ProfilesDir + "alpha" + PlaintextExt}},

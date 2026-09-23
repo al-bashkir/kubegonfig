@@ -83,18 +83,9 @@ func selectGPGKey() (string, error) {
 	fmt.Fprintln(os.Stderr)
 
 	for i, k := range keys {
-		uid := ""
-		if len(k.UIDs) > 0 {
-			uid = k.UIDs[0]
-		}
 		fmt.Fprintf(os.Stderr, "  %d) %s\n", i+1, k.KeyID)
-		if uid != "" {
+		for _, uid := range k.UIDs {
 			fmt.Fprintf(os.Stderr, "     %s\n", uid)
-		}
-		if len(k.UIDs) > 1 {
-			for _, extra := range k.UIDs[1:] {
-				fmt.Fprintf(os.Stderr, "     %s\n", extra)
-			}
 		}
 		fmt.Fprintln(os.Stderr)
 	}

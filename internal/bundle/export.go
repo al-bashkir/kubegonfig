@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
-	"sort"
+	"slices"
 	"time"
 
 	"kubegonfig/internal/config"
@@ -16,6 +16,8 @@ import (
 	"kubegonfig/internal/profile"
 	"kubegonfig/internal/shell"
 	"kubegonfig/internal/storage"
+
+	"gopkg.in/yaml.v3"
 )
 
 // ExportOptions configures an archive export.
@@ -43,17 +45,13 @@ type ExportOptions struct {
 // optionally config.yaml) to opts.Out. Holds the profile lock for the full
 // snapshot duration.
 func Export(mgr *profile.Manager, cfg *config.Config, opts ExportOptions) error {
-	if mgr == nil {
-		return fmt.Errorf("Export: nil manager")
-	}
-	if opts.Out == nil {
-		return fmt.Errorf("Export: nil output writer")
-	}
 	if len(opts.Names) == 0 {
 		return fmt.Errorf("Export: no profiles selected")
 	}
 
-	names := dedupeAndSort(opts.Names)
+	names := slices.Clone(opts.Names)
+	slices.Sort(names)
+	names = slices.Compact(names)
 	for _, name := range names {
 		if err := shell.ValidateName(name); err != nil {
 			return fmt.Errorf("export %q: %w", name, err)
@@ -90,7 +88,7 @@ func Export(mgr *profile.Manager, cfg *config.Config, opts ExportOptions) error 
 			})
 		}
 
-		manifestBody, err := MarshalManifest(manifest)
+		manifestBody, err := yaml.Marshal(manifest)
 		if err != nil {
 			return fmt.Errorf("marshal manifest: %w", err)
 		}
@@ -141,10 +139,6 @@ func writeTarEntry(tw *tar.Writer, name string, body []byte, mtime time.Time) er
 		Mode:    0600,
 		Size:    int64(len(body)),
 		ModTime: mtime,
-		Uid:     0,
-		Gid:     0,
-		Uname:   "",
-		Gname:   "",
 		Format:  tar.FormatUSTAR,
 	}
 	if err := tw.WriteHeader(hdr); err != nil {
@@ -156,24 +150,7 @@ func writeTarEntry(tw *tar.Writer, name string, body []byte, mtime time.Time) er
 	return nil
 }
 
-func dedupeAndSort(in []string) []string {
-	seen := make(map[string]struct{}, len(in))
-	out := make([]string, 0, len(in))
-	for _, n := range in {
-		if _, dup := seen[n]; dup {
-			continue
-		}
-		seen[n] = struct{}{}
-		out = append(out, n)
-	}
-	sort.Strings(out)
-	return out
-}
-
 func readConfigBody(cfg *config.Config) ([]byte, error) {
-	if cfg == nil {
-		return nil, fmt.Errorf("nil config")
-	}
 	path := cfg.Path()
 	if path == "" {
 		return nil, fmt.Errorf("config path is not set; load config before export")
