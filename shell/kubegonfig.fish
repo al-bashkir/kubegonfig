@@ -2,8 +2,8 @@
 # Source this file from config.fish:
 #   source /path/to/kubegonfig/shell/kubegonfig.fish
 #
-# This wraps the kubegonfig binary so that 'use' and 'env' subcommands
-# are eval'd in the current shell, allowing KUBECONFIG export to take effect.
+# This wraps the kubegonfig binary so that the 'use' subcommand
+# is eval'd in the current shell, allowing KUBECONFIG export to take effect.
 
 function kubegonfig --wraps=kubegonfig
     set -l cmd
@@ -19,7 +19,7 @@ function kubegonfig --wraps=kubegonfig
     end
 
     switch "$cmd"
-        case use env
+        case use
             set -l has_shell_flag 0
             for arg in $argv
                 switch "$arg"

@@ -21,6 +21,10 @@ Use with eval to set KUBECONFIG in the current shell:
 
   eval "$(kubegonfig use my-cluster)"
 
+For fish shell:
+
+  kubegonfig use my-cluster --shell fish | source
+
 This is the correct Unix approach: a child process cannot modify
 the parent shell's environment. The eval pattern lets the shell
 interpret the export command printed by kubegonfig.`,

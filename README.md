@@ -41,10 +41,10 @@ kubegonfig init
 kubegonfig init --recipient your-key-id
 
 # Import an existing kubeconfig
-kubegonfig import production --from ~/.kube/config
+kubegonfig create production --from ~/.kube/config
 
 # Activate a profile (must be eval'd to set KUBECONFIG in this shell)
-eval "$(kubegonfig env production)"
+eval "$(kubegonfig use production)"
 
 # Run a one-off command against a profile
 kubegonfig exec staging -- kubectl get pods
@@ -52,7 +52,7 @@ kubegonfig exec staging -- kubectl get pods
 
 ## Shell integration
 
-Source the appropriate wrapper in your shell rc file. This lets `use` and `env` subcommands export `KUBECONFIG` into your current shell session without wrapping them in `eval` manually. The bash/zsh wrappers request POSIX shell output by default (passing `--shell posix`); the fish wrapper requests fish output (passing `--shell fish`). The wrappers also recognize global `--quiet` / `-q` before `use` or `env`.
+Source the appropriate wrapper in your shell rc file. This lets the `use` subcommand export `KUBECONFIG` into your current shell session without wrapping them in `eval` manually. The bash/zsh wrappers request POSIX shell output by default (passing `--shell posix`); the fish wrapper requests fish output (passing `--shell fish`). The wrappers also recognize global `--quiet` / `-q` before `use`.
 
 ### Bash
 
@@ -78,11 +78,11 @@ source /path/to/kubegonfig/shell/kubegonfig.fish
 To invoke manually without the wrapper function, use `eval` or `source` directly:
 
 ```bash
-eval "$(kubegonfig env my-cluster)"
+eval "$(kubegonfig use my-cluster)"
 ```
 
 ```fish
-kubegonfig env my-cluster --shell fish | source
+kubegonfig use my-cluster --shell fish | source
 ```
 
 ## Commands
@@ -91,10 +91,8 @@ kubegonfig env my-cluster --shell fish | source
 |---------|-------------|
 | `init` | Configure GPG recipient (interactive key selection) |
 | `create <name>` | Create a profile from `--from` file or `$VISUAL`/`$EDITOR` |
-| `import <name> --from <path>` | Import a kubeconfig file as a profile |
 | `list` (`ls`) | List all profiles (`*` marks active) |
 | `use <name>` | Decrypt and activate a profile (`--shell posix\|fish`) |
-| `env <name>` | Print shell export and mark the profile active (`--shell posix\|fish`) |
 | `exec <name> -- cmd` | Run a command with `KUBECONFIG` set |
 | `edit <name>` | Decrypt, edit in `$VISUAL`/`$EDITOR`, re-encrypt |
 | `current` | Print the active profile name |
@@ -121,7 +119,7 @@ $XDG_CONFIG_HOME/kubegonfig/
   config.yaml             # GPG recipient, settings
 
 $XDG_RUNTIME_DIR/kubegonfig/
-  <name>.yaml             # activation temp file for env/use (0600)
+  <name>.yaml             # activation temp file for use (0600)
 ```
 
 If `XDG_RUNTIME_DIR` is not set, runtime files are stored in a private directory under the system temp directory named `kubegonfig-<uid>`.
@@ -166,7 +164,7 @@ shell_style: posix # posix or fish
 - `gpg_recipients` adds optional extra recipients for new or updated profiles.
   Blank recipients are rejected; recipients are trimmed and deduplicated before use.
 - `data_dir` overrides `$XDG_DATA_HOME/kubegonfig` for encrypted profiles and active state. When set, it must be a non-blank absolute path.
-- `shell_style` controls default output for `env` and `use`; `--shell` overrides it per command. Only `posix` and `fish` are accepted.
+- `shell_style` controls default output for `use`; `--shell` overrides it per command. Only `posix` and `fish` are accepted.
 - Configuration is read from verified non-symlink directories. Unknown configuration keys, invalid `shell_style` values, and invalid `data_dir` values are rejected when the config is loaded so typos or unsafe paths do not silently change behavior.
 
 ## Security
@@ -177,7 +175,7 @@ shell_style: posix # posix or fish
 - Shell output is properly escaped and environment variable names are validated before shell assignment output is emitted
 - No secrets are logged or printed to stdout/stderr; GPG stderr is reduced to short actionable diagnostics before it is included in errors
 - `exec` unlinks its decrypted temp file before the child command continues and passes it through an inherited file descriptor (`/proc/self/fd/3` on Linux, `/dev/fd/3` elsewhere)
-- `env` and `use` intentionally leave a runtime temp file available for the current shell; run `kubegonfig cleanup` to remove stale activation files
+- `use` intentionally leaves a runtime temp file available for the current shell; run `kubegonfig cleanup` to remove stale activation files
 - Runtime cleanup removes valid profile-name-shaped `*.yaml` activation files only from the kubegonfig runtime directory
 - The active profile state name syntax is validated before it is printed or used to update profile state
 - Kubeconfig validation requires `apiVersion: v1`, `kind: Config`, at least one cluster/context/user, unique cluster/context/user names, cluster servers, context cluster/user references that point at defined entries, and a valid `current-context` when set

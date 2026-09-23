@@ -2,8 +2,8 @@
 # Source this file from .zshrc:
 #   source /path/to/kubegonfig/shell/kubegonfig.zsh
 #
-# This wraps the kubegonfig binary so that 'use' and 'env' subcommands
-# are eval'd in the current shell, allowing KUBECONFIG export to take effect.
+# This wraps the kubegonfig binary so that the 'use' subcommand
+# is eval'd in the current shell, allowing KUBECONFIG export to take effect.
 
 kubegonfig() {
     local cmd=""
@@ -23,7 +23,7 @@ kubegonfig() {
     done
 
     case "$cmd" in
-        use|env)
+        use)
             local has_shell=0
             for arg in "$@"; do
                 case "$arg" in

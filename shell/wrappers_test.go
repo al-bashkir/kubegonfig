@@ -55,7 +55,7 @@ func testWrapperHelpPassesThroughWithoutEval(t *testing.T, shellName, wrapperFil
 		name string
 		args []string
 	}{
-		{name: "env long help", args: []string{"env", "--help"}},
+		{name: "use long help", args: []string{"use", "--help"}},
 		{name: "use short help", args: []string{"use", "-h"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -115,14 +115,14 @@ func testWrapperAddsDefaultPosixShellStyle(t *testing.T, shellName, wrapperFile 
 		wantArgs string
 	}{
 		{
-			name:     "env default shell",
-			args:     []string{"env", "prod"},
-			wantArgs: "env prod --shell posix\n",
+			name:     "use default shell",
+			args:     []string{"use", "prod"},
+			wantArgs: "use prod --shell posix\n",
 		},
 		{
-			name:     "env with global quiet before subcommand",
-			args:     []string{"--quiet", "env", "prod"},
-			wantArgs: "--quiet env prod --shell posix\n",
+			name:     "use with global quiet before subcommand",
+			args:     []string{"--quiet", "use", "prod"},
+			wantArgs: "--quiet use prod --shell posix\n",
 		},
 		{
 			name:     "use with short global quiet before subcommand",
@@ -135,9 +135,9 @@ func testWrapperAddsDefaultPosixShellStyle(t *testing.T, shellName, wrapperFile 
 			wantArgs: "use prod --shell fish\n",
 		},
 		{
-			name:     "env explicit shell equals",
-			args:     []string{"env", "prod", "--shell=fish"},
-			wantArgs: "env prod --shell=fish\n",
+			name:     "use explicit shell equals",
+			args:     []string{"use", "prod", "--shell=fish"},
+			wantArgs: "use prod --shell=fish\n",
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -190,7 +190,7 @@ func testFishWrapperHelpPassesThroughWithoutEval(t *testing.T) {
 		name string
 		args []string
 	}{
-		{name: "env long help", args: []string{"env", "--help"}},
+		{name: "use long help", args: []string{"use", "--help"}},
 		{name: "use short help", args: []string{"use", "-h"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -248,14 +248,14 @@ func testFishWrapperAddsDefaultFishShellStyle(t *testing.T) {
 		wantArgs string
 	}{
 		{
-			name:     "env default shell",
-			args:     []string{"env", "prod"},
-			wantArgs: "env prod --shell fish\n",
+			name:     "use default shell",
+			args:     []string{"use", "prod"},
+			wantArgs: "use prod --shell fish\n",
 		},
 		{
-			name:     "env with global quiet before subcommand",
-			args:     []string{"--quiet", "env", "prod"},
-			wantArgs: "--quiet env prod --shell fish\n",
+			name:     "use with global quiet before subcommand",
+			args:     []string{"--quiet", "use", "prod"},
+			wantArgs: "--quiet use prod --shell fish\n",
 		},
 		{
 			name:     "use with short global quiet before subcommand",
@@ -268,9 +268,9 @@ func testFishWrapperAddsDefaultFishShellStyle(t *testing.T) {
 			wantArgs: "use prod --shell posix\n",
 		},
 		{
-			name:     "env explicit shell equals",
-			args:     []string{"env", "prod", "--shell=posix"},
-			wantArgs: "env prod --shell=posix\n",
+			name:     "use explicit shell equals",
+			args:     []string{"use", "prod", "--shell=posix"},
+			wantArgs: "use prod --shell=posix\n",
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
