@@ -19,7 +19,7 @@ import (
 func setupExportTestManager(t *testing.T, dataDir string) (*config.Config, *profile.Manager) {
 	t.Helper()
 	c := &config.Config{DataDir: dataDir, GPGRecipient: "test@example.com"}
-	c.SetPathForTest(filepath.Join(t.TempDir(), "config.yaml"))
+	c.Path = filepath.Join(t.TempDir(), "config.yaml")
 	if err := c.Save(); err != nil {
 		t.Fatalf("save cfg: %v", err)
 	}

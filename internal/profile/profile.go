@@ -66,7 +66,11 @@ func (m *Manager) writeProfile(name string, data []byte) error {
 }
 
 func (m *Manager) readProfile(name string) ([]byte, error) {
-	return storage.ReadFileInDir(m.profilesPath(), profileFileName(name))
+	data, err := storage.ReadFileInDir(m.profilesPath(), profileFileName(name))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, fmt.Errorf("profile %q not found", name)
+	}
+	return data, err
 }
 
 func (m *Manager) profileMtime(name string) (time.Time, error) {
@@ -170,14 +174,7 @@ func (m *Manager) ReadEncrypted(name string) ([]byte, error) {
 	if err := shell.ValidateName(name); err != nil {
 		return nil, err
 	}
-	data, err := m.readProfile(name)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil, fmt.Errorf("profile %q not found", name)
-		}
-		return nil, err
-	}
-	return data, nil
+	return m.readProfile(name)
 }
 
 // WriteEncrypted atomically writes a raw encrypted blob for the named profile.
@@ -193,9 +190,6 @@ func (m *Manager) WriteEncrypted(name string, blob []byte) error {
 func (m *Manager) decryptProfile(name string) ([]byte, error) {
 	encrypted, err := m.readProfile(name)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil, fmt.Errorf("profile %q not found", name)
-		}
 		return nil, err
 	}
 

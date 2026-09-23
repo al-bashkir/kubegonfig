@@ -178,7 +178,7 @@ func TestSaveAndLoad(t *testing.T) {
 	cfg := &Config{
 		GPGRecipient: "user@example.com",
 		ShellStyle:   "posix",
-		path:         filepath.Join(tmp, "kubegonfig", "config.yaml"),
+		Path:         filepath.Join(tmp, "kubegonfig", "config.yaml"),
 	}
 
 	if err := cfg.Save(); err != nil {
@@ -306,12 +306,5 @@ func TestResolveDataDir_Default(t *testing.T) {
 	want := "/xdg/data/kubegonfig"
 	if got != want {
 		t.Errorf("ResolveDataDir() = %q, want %q", got, want)
-	}
-}
-
-func TestPath(t *testing.T) {
-	cfg := &Config{path: "/some/path/config.yaml"}
-	if cfg.Path() != "/some/path/config.yaml" {
-		t.Errorf("Path() = %q, want %q", cfg.Path(), "/some/path/config.yaml")
 	}
 }
