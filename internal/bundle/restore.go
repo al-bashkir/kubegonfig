@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 
@@ -27,7 +28,6 @@ type RestoreOptions struct {
 	Force        bool
 	SkipExisting bool
 	MergeConfig  bool
-	ProfilesOnly bool
 	DryRun       bool
 }
 
@@ -36,7 +36,7 @@ type RestorePlan struct {
 	ToCreate     []string
 	ToOverwrite  []string
 	ToSkip       []string
-	ConfigAction string // "ignore" | "merge" | "skip-profiles-only"
+	ConfigAction string // "ignore" | "merge"
 }
 
 // Restore reads a tar archive from opts.In and applies it to mgr/cfg.
@@ -96,13 +96,9 @@ func Restore(mgr *profile.Manager, cfg *config.Config, opts RestoreOptions) (Res
 				len(collisions), strings.Join(collisions, ", "))
 		}
 
-		switch {
-		case opts.ProfilesOnly:
-			plan.ConfigAction = "skip-profiles-only"
-		case opts.MergeConfig && manifest.ConfigIncluded:
+		plan.ConfigAction = "ignore"
+		if opts.MergeConfig && manifest.ConfigIncluded {
 			plan.ConfigAction = "merge"
-		default:
-			plan.ConfigAction = "ignore"
 		}
 
 		if opts.DryRun {
@@ -130,9 +126,6 @@ func Restore(mgr *profile.Manager, cfg *config.Config, opts RestoreOptions) (Res
 			}
 			if err != nil {
 				return fmt.Errorf("read archive entry: %w", err)
-			}
-			if hdr.Typeflag == tar.TypeDir {
-				continue
 			}
 			if hdr.Typeflag != tar.TypeReg {
 				return fmt.Errorf("archive entry %q has disallowed type %d", hdr.Name, hdr.Typeflag)
@@ -245,20 +238,10 @@ func mergeArchivedConfig(local *config.Config, archivedBody []byte) error {
 	if err := yaml.Unmarshal(archivedBody, &archived); err != nil {
 		return fmt.Errorf("parse archived config: %w", err)
 	}
-	seen := make(map[string]struct{}, len(local.GPGRecipients))
-	for _, r := range local.GPGRecipients {
-		seen[strings.TrimSpace(r)] = struct{}{}
-	}
 	for _, r := range archived.GPGRecipients {
-		r = strings.TrimSpace(r)
-		if r == "" {
-			continue
+		if r = strings.TrimSpace(r); r != "" && !slices.Contains(local.GPGRecipients, r) {
+			local.GPGRecipients = append(local.GPGRecipients, r)
 		}
-		if _, ok := seen[r]; ok {
-			continue
-		}
-		seen[r] = struct{}{}
-		local.GPGRecipients = append(local.GPGRecipients, r)
 	}
 	return local.Save()
 }

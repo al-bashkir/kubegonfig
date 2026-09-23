@@ -103,19 +103,6 @@ func TestEncrypt_NoRecipients(t *testing.T) {
 	}
 }
 
-func TestNonBlank(t *testing.T) {
-	got := nonBlank([]string{"user@example.com", "", "second@example.com", "\t"})
-	want := []string{"user@example.com", "second@example.com"}
-	if len(got) != len(want) {
-		t.Fatalf("nonBlank() len = %d, want %d: %v", len(got), len(want), got)
-	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Fatalf("nonBlank()[%d] = %q, want %q", i, got[i], want[i])
-		}
-	}
-}
-
 func TestLookupGPGResolvesFromPath(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "gpg2")

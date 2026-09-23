@@ -111,7 +111,7 @@ func TestEnsureDirRejectsSymlink(t *testing.T) {
 	}
 }
 
-func TestOpenDirNoFollowRejectsFIFOImmediately(t *testing.T) {
+func TestOpenVerifiedDirRejectsFIFOImmediately(t *testing.T) {
 	tmp := t.TempDir()
 	fifo := filepath.Join(tmp, "fifo")
 	if err := unix.Mkfifo(fifo, 0600); err != nil {
@@ -120,7 +120,7 @@ func TestOpenDirNoFollowRejectsFIFOImmediately(t *testing.T) {
 
 	result := make(chan error, 1)
 	go func() {
-		f, err := openDirNoFollow(fifo)
+		f, err := openVerifiedDir(fifo)
 		if f != nil {
 			_ = f.Close()
 		}
@@ -130,10 +130,10 @@ func TestOpenDirNoFollowRejectsFIFOImmediately(t *testing.T) {
 	select {
 	case err := <-result:
 		if err == nil {
-			t.Fatal("openDirNoFollow() error = nil, want FIFO rejection")
+			t.Fatal("openVerifiedDir() error = nil, want FIFO rejection")
 		}
 	case <-time.After(time.Second):
-		t.Fatal("openDirNoFollow() blocked on FIFO")
+		t.Fatal("openVerifiedDir() blocked on FIFO")
 	}
 }
 

@@ -16,7 +16,6 @@ var (
 	restoreForce        bool
 	restoreSkipExisting bool
 	restoreMergeConfig  bool
-	restoreProfilesOnly bool
 	restoreDryRun       bool
 )
 
@@ -60,7 +59,6 @@ func runRestore(archive string) error {
 		Force:        restoreForce,
 		SkipExisting: restoreSkipExisting,
 		MergeConfig:  restoreMergeConfig,
-		ProfilesOnly: restoreProfilesOnly,
 		DryRun:       restoreDryRun,
 	})
 	if err != nil {
@@ -80,6 +78,5 @@ func init() {
 	restoreCmd.Flags().BoolVar(&restoreForce, "force", false, "overwrite profiles whose names already exist locally")
 	restoreCmd.Flags().BoolVar(&restoreSkipExisting, "skip-existing", false, "keep local copies; restore only new names")
 	restoreCmd.Flags().BoolVar(&restoreMergeConfig, "merge-config", false, "union archived config recipients into the local config")
-	restoreCmd.Flags().BoolVar(&restoreProfilesOnly, "profiles-only", false, "ignore archived config.yaml even with --merge-config")
 	restoreCmd.Flags().BoolVar(&restoreDryRun, "dry-run", false, "parse and validate the archive, print the plan, and exit")
 }

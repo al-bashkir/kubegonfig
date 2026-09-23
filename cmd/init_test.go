@@ -3,33 +3,53 @@
 
 package cmd
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
 
-func TestInitRecipientFromFlag(t *testing.T) {
+	"kubegonfig/internal/config"
+
+	"github.com/spf13/cobra"
+)
+
+func TestInitRecipientFlag(t *testing.T) {
 	tests := []struct {
 		name      string
 		value     string
-		changed   bool
 		want      string
-		wantOK    bool
 		wantError bool
 	}{
-		{name: "not set", value: "", changed: false, want: "", wantOK: false},
-		{name: "trimmed", value: " user@example.com ", changed: true, want: "user@example.com", wantOK: true},
-		{name: "blank", value: " \t ", changed: true, wantError: true},
+		{name: "trimmed", value: " user@example.com ", want: "user@example.com"},
+		{name: "blank", value: " \t ", wantError: true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, ok, err := initRecipientFromFlag(tt.value, tt.changed)
+			gpgDir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(gpgDir, "gpg"), []byte("#!/bin/sh\n"), 0700); err != nil {
+				t.Fatalf("write fake gpg: %v", err)
+			}
+			t.Setenv("PATH", gpgDir)
+			t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+			t.Cleanup(func() { initRecipient = "" })
+
+			cmd := &cobra.Command{Use: "init", RunE: initCmd.RunE}
+			cmd.Flags().StringVarP(&initRecipient, "recipient", "r", "", "")
+			if err := cmd.ParseFlags([]string{"--recipient", tt.value}); err != nil {
+				t.Fatalf("ParseFlags() error = %v", err)
+			}
+			err := cmd.RunE(cmd, nil)
 			if (err != nil) != tt.wantError {
-				t.Fatalf("initRecipientFromFlag() error = %v, wantError %v", err, tt.wantError)
+				t.Fatalf("init error = %v, wantError %v", err, tt.wantError)
 			}
-			if got != tt.want {
-				t.Fatalf("initRecipientFromFlag() recipient = %q, want %q", got, tt.want)
+
+			c, err := config.Load()
+			if err != nil {
+				t.Fatalf("config.Load() error = %v", err)
 			}
-			if ok != tt.wantOK {
-				t.Fatalf("initRecipientFromFlag() ok = %v, want %v", ok, tt.wantOK)
+			if c.GPGRecipient != tt.want {
+				t.Fatalf("saved recipient = %q, want %q", c.GPGRecipient, tt.want)
 			}
 		})
 	}

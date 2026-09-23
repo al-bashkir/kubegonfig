@@ -9,7 +9,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"kubegonfig/internal/bundle"
 	"kubegonfig/internal/storage"
@@ -121,9 +120,7 @@ func guardPlaintextDestination(out string) error {
 	if err != nil {
 		return fmt.Errorf("resolve data dir: %w", err)
 	}
-	rel, err := filepath.Rel(dataAbs, abs)
-	escapes := rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator))
-	if err == nil && !filepath.IsAbs(rel) && !escapes {
+	if rel, err := filepath.Rel(dataAbs, abs); err == nil && filepath.IsLocal(rel) {
 		return fmt.Errorf("refusing to write plaintext archive inside the kubegonfig data directory %s", dataAbs)
 	}
 	return nil

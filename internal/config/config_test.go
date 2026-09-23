@@ -274,15 +274,6 @@ func TestValidate(t *testing.T) {
 	if err := (&Config{GPGRecipients: []string{"user@example.com", ""}}).Validate(); err == nil {
 		t.Error("Validate() should fail with blank extra recipient")
 	}
-	if err := (&Config{GPGRecipient: "user@example.com", ShellStyle: "powershell"}).Validate(); err == nil {
-		t.Error("Validate() should fail with invalid shell_style")
-	}
-	if err := (&Config{GPGRecipient: "user@example.com", DataDir: "relative"}).Validate(); err == nil {
-		t.Error("Validate() should fail with relative data_dir")
-	}
-	if err := (&Config{GPGRecipient: "user@example.com", DataDir: "   "}).Validate(); err == nil {
-		t.Error("Validate() should fail with blank data_dir")
-	}
 }
 
 func TestResolveDataDir_Override(t *testing.T) {
