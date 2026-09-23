@@ -6,6 +6,8 @@ package cmd
 import (
 	"fmt"
 
+	"kubegonfig/internal/shell"
+
 	"github.com/spf13/cobra"
 )
 
@@ -33,13 +35,21 @@ interpret the export command printed by kubegonfig.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		name := args[0]
 
-		exportCmd, err := activateProfile(name, useShell)
+		styleFlag := useShell
+		if styleFlag == "" {
+			styleFlag = cfg.ShellStyle
+		}
+		style, err := shell.NormalizeStyle(styleFlag)
+		if err != nil {
+			return err
+		}
+		path, err := mgr.Activate(name)
 		if err != nil {
 			return err
 		}
 
 		// Print the export statement to stdout (for eval).
-		fmt.Println(exportCmd)
+		fmt.Println(shell.FormatSet(style, "KUBECONFIG", path))
 
 		info("Switched to profile %q", name)
 		return nil

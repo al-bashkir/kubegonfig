@@ -4,8 +4,6 @@
 package cmd
 
 import (
-	"fmt"
-
 	"kubegonfig/internal/editor"
 
 	"github.com/spf13/cobra"
@@ -21,13 +19,7 @@ save it. The temporary plaintext file is cleaned up immediately.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		name := args[0]
 
-		changed, err := mgr.Edit(name, func(original []byte) ([]byte, error) {
-			edited, err := editor.Edit(original)
-			if err != nil {
-				return nil, fmt.Errorf("editor: %w", err)
-			}
-			return edited, nil
-		})
+		changed, err := mgr.Edit(name, editor.Edit)
 		if err != nil {
 			return err
 		}

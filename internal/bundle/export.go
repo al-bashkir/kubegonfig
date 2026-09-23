@@ -103,7 +103,7 @@ func Export(mgr *profile.Manager, cfg *config.Config, opts ExportOptions) error 
 			}
 		}
 		if opts.IncludeConfig {
-			configBody, err := readConfigBody(cfg)
+			configBody, err := storage.ReadFileInDir(filepath.Dir(cfg.Path), filepath.Base(cfg.Path))
 			if err != nil {
 				return fmt.Errorf("read config.yaml: %w", err)
 			}
@@ -148,14 +148,4 @@ func writeTarEntry(tw *tar.Writer, name string, body []byte, mtime time.Time) er
 		return fmt.Errorf("write tar body for %q: %w", name, err)
 	}
 	return nil
-}
-
-func readConfigBody(cfg *config.Config) ([]byte, error) {
-	path := cfg.Path
-	if path == "" {
-		return nil, fmt.Errorf("config path is not set; load config before export")
-	}
-	dir := filepath.Dir(path)
-	name := filepath.Base(path)
-	return storage.ReadFileInDir(dir, name)
 }

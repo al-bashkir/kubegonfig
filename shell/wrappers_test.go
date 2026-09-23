@@ -13,19 +13,19 @@ import (
 )
 
 func TestBashWrapperHelpPassesThroughWithoutEval(t *testing.T) {
-	testWrapperHelpPassesThroughWithoutEval(t, "bash", "kubegonfig.bash")
+	testWrapperHelpPassesThroughWithoutEval(t, "bash", "kubegonfig.sh")
 }
 
 func TestZshWrapperHelpPassesThroughWithoutEval(t *testing.T) {
-	testWrapperHelpPassesThroughWithoutEval(t, "zsh", "kubegonfig.zsh")
+	testWrapperHelpPassesThroughWithoutEval(t, "zsh", "kubegonfig.sh")
 }
 
 func TestBashWrapperAddsDefaultPosixShellStyle(t *testing.T) {
-	testWrapperAddsDefaultPosixShellStyle(t, "bash", "kubegonfig.bash")
+	testWrapperAddsDefaultPosixShellStyle(t, "bash", "kubegonfig.sh")
 }
 
 func TestZshWrapperAddsDefaultPosixShellStyle(t *testing.T) {
-	testWrapperAddsDefaultPosixShellStyle(t, "zsh", "kubegonfig.zsh")
+	testWrapperAddsDefaultPosixShellStyle(t, "zsh", "kubegonfig.sh")
 }
 
 func TestFishWrapperHelpPassesThroughWithoutEval(t *testing.T) {
