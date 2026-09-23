@@ -54,10 +54,7 @@ func TestConfigDir_WithEnv(t *testing.T) {
 
 func TestRuntimeDir_WithEnv(t *testing.T) {
 	t.Setenv("XDG_RUNTIME_DIR", "/run/user/1000")
-	dir, err := RuntimeDir()
-	if err != nil {
-		t.Fatalf("RuntimeDir() error: %v", err)
-	}
+	dir := RuntimeDir()
 	want := "/run/user/1000/kubegonfig"
 	if dir != want {
 		t.Errorf("RuntimeDir() = %q, want %q", dir, want)
@@ -66,10 +63,7 @@ func TestRuntimeDir_WithEnv(t *testing.T) {
 
 func TestRuntimeDir_Fallback(t *testing.T) {
 	t.Setenv("XDG_RUNTIME_DIR", "")
-	dir, err := RuntimeDir()
-	if err != nil {
-		t.Fatalf("RuntimeDir() error: %v", err)
-	}
+	dir := RuntimeDir()
 	// Should contain kubegonfig and uid in the path.
 	if dir == "" {
 		t.Error("RuntimeDir() returned empty string")
@@ -452,29 +446,47 @@ func TestRegularFileInDirSkipsSymlinkAndFIFO(t *testing.T) {
 	}
 }
 
-func TestFileLock(t *testing.T) {
-	tmp := t.TempDir()
-	lockPath := filepath.Join(tmp, "test.lock")
+func TestWithLock(t *testing.T) {
+	lockPath := filepath.Join(t.TempDir(), "test.lock")
 
-	lock, err := NewFileLock(lockPath)
+	ran := false
+	if err := WithLock(lockPath, func() error { ran = true; return nil }); err != nil {
+		t.Fatalf("WithLock() error: %v", err)
+	}
+	if !ran {
+		t.Fatal("WithLock() did not run fn")
+	}
+
+	want := errors.New("boom")
+	if err := WithLock(lockPath, func() error { return want }); !errors.Is(err, want) {
+		t.Fatalf("WithLock() error = %v, want %v", err, want)
+	}
+	assertLockFree(t, lockPath)
+}
+
+func TestWithLockReleasesOnPanic(t *testing.T) {
+	lockPath := filepath.Join(t.TempDir(), "test.lock")
+
+	func() {
+		defer func() { _ = recover() }()
+		_ = WithLock(lockPath, func() error { panic("boom") })
+	}()
+	assertLockFree(t, lockPath)
+}
+
+func assertLockFree(t *testing.T, lockPath string) {
+	t.Helper()
+	f, err := os.OpenFile(lockPath, os.O_RDWR, 0)
 	if err != nil {
-		t.Fatalf("NewFileLock() error: %v", err)
+		t.Fatalf("open lock file: %v", err)
 	}
-
-	if err := lock.Lock(); err != nil {
-		t.Fatalf("Lock() error: %v", err)
-	}
-
-	if err := lock.Unlock(); err != nil {
-		t.Fatalf("Unlock() error: %v", err)
-	}
-
-	if err := lock.Unlock(); err != nil {
-		t.Fatalf("Unlock() second call error: %v", err)
+	defer func() { _ = f.Close() }()
+	if err := unix.Flock(int(f.Fd()), unix.LOCK_EX|unix.LOCK_NB); err != nil {
+		t.Fatalf("lock still held: %v", err)
 	}
 }
 
-func TestFileLockRejectsSymlinkLockFile(t *testing.T) {
+func TestWithLockRejectsSymlinkLockFile(t *testing.T) {
 	tmp := t.TempDir()
 	target := filepath.Join(tmp, "target")
 	lockPath := filepath.Join(tmp, "test.lock")
@@ -485,12 +497,8 @@ func TestFileLockRejectsSymlinkLockFile(t *testing.T) {
 		t.Skipf("Symlink() unavailable: %v", err)
 	}
 
-	lock, err := NewFileLock(lockPath)
-	if err != nil {
-		t.Fatalf("NewFileLock() error: %v", err)
-	}
-	if err := lock.Lock(); err == nil {
-		t.Fatal("Lock() error = nil, want symlink rejection")
+	if err := WithLock(lockPath, func() error { return nil }); err == nil {
+		t.Fatal("WithLock() error = nil, want symlink rejection")
 	}
 }
 

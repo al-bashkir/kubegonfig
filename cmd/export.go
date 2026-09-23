@@ -12,7 +12,6 @@ import (
 	"strings"
 
 	"kubegonfig/internal/bundle"
-	"kubegonfig/internal/shell"
 	"kubegonfig/internal/storage"
 
 	"github.com/spf13/cobra"
@@ -65,12 +64,6 @@ func runExport(args []string) error {
 		}
 		names = all
 	}
-	for _, n := range names {
-		if err := shell.ValidateName(n); err != nil {
-			return fmt.Errorf("export %q: %w", n, err)
-		}
-	}
-
 	if exportDecrypt {
 		if err := guardPlaintextDestination(exportOutput); err != nil {
 			return err
@@ -81,7 +74,7 @@ func runExport(args []string) error {
 		Names:             names,
 		Decrypt:           exportDecrypt,
 		IncludeConfig:     !exportProfilesOnly,
-		KubegonfigVersion: Version(),
+		KubegonfigVersion: rootCmd.Version,
 	}
 
 	if exportOutput == "-" {

@@ -4,31 +4,22 @@
 package cmd
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
 )
 
-func TestSkipSetupForHelpRequest(t *testing.T) {
-	cmd := &cobra.Command{Use: "exec", DisableFlagParsing: true}
-	cmd.SetHelpCommand(&cobra.Command{Use: "help"})
-
-	if !skipSetup(cmd, []string{"--help"}) {
-		t.Fatal("skipSetup() = false, want true for help request")
-	}
-}
-
-func TestSkipSetupDoesNotTreatParsedArgsAsHelpRequest(t *testing.T) {
-	cmd := &cobra.Command{Use: "delete"}
-
-	if skipSetup(cmd, []string{"-h"}) {
-		t.Fatal("skipSetup() = true, want false for parsed positional help-like arg")
-	}
-}
-
-func TestHelpRequestIgnoresArgsAfterSeparator(t *testing.T) {
-	if isHelpRequest([]string{"prod", "--", "sh", "-h"}) {
-		t.Fatal("isHelpRequest() = true, want false for child command help flag")
+func TestExecRequiresCommandAfterSeparator(t *testing.T) {
+	for _, args := range [][]string{{"prod"}, {"prod", "--"}, {"prod", "kubectl"}, {"--", "kubectl"}} {
+		cmd := &cobra.Command{Use: "exec", RunE: execCmd.RunE}
+		if err := cmd.ParseFlags(args); err != nil {
+			t.Fatalf("ParseFlags(%q) error = %v", args, err)
+		}
+		err := cmd.RunE(cmd, cmd.Flags().Args())
+		if err == nil || !strings.Contains(err.Error(), "no command specified") {
+			t.Fatalf("exec %q error = %v, want no command specified", args, err)
+		}
 	}
 }
 
@@ -39,7 +30,7 @@ func TestSkipSetupForCompletionSubcommand(t *testing.T) {
 	rootCmd.AddCommand(completion)
 	t.Cleanup(func() { rootCmd.RemoveCommand(completion) })
 
-	if !skipSetup(bash, nil) {
+	if !skipSetup(bash) {
 		t.Fatal("skipSetup() = false, want true for completion subcommand")
 	}
 }
@@ -47,7 +38,7 @@ func TestSkipSetupForCompletionSubcommand(t *testing.T) {
 func TestSkipSetupForShellCompletionRequest(t *testing.T) {
 	cmd := &cobra.Command{Use: cobra.ShellCompRequestCmd}
 
-	if !skipSetup(cmd, []string{"exec", ""}) {
+	if !skipSetup(cmd) {
 		t.Fatal("skipSetup() = false, want true for shell completion request")
 	}
 }

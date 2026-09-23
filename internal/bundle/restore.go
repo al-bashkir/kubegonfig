@@ -5,7 +5,6 @@ package bundle
 
 import (
 	"archive/tar"
-	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -13,7 +12,6 @@ import (
 	"path"
 	"sort"
 	"strings"
-	"time"
 
 	"kubegonfig/internal/config"
 	"kubegonfig/internal/crypto"
@@ -36,33 +34,20 @@ type RestoreOptions struct {
 
 // RestorePlan summarizes what Restore did (or would do, with DryRun).
 type RestorePlan struct {
-	SchemaVersion int
-	CreatedAt     time.Time
-	SourceVersion string
-	Encrypted     bool
-	ToCreate      []string
-	ToOverwrite   []string
-	ToSkip        []string
-	ConfigAction  string // "ignore" | "merge" | "skip-profiles-only"
+	ToCreate     []string
+	ToOverwrite  []string
+	ToSkip       []string
+	ConfigAction string // "ignore" | "merge" | "skip-profiles-only"
 }
 
 // Restore reads a tar archive from opts.In and applies it to mgr/cfg.
 func Restore(mgr *profile.Manager, cfg *config.Config, opts RestoreOptions) (RestorePlan, error) {
 	plan := RestorePlan{}
-	if mgr == nil {
-		return plan, fmt.Errorf("Restore: nil manager")
-	}
-	if opts.In == nil {
-		return plan, fmt.Errorf("Restore: nil input reader")
-	}
 	if opts.Force && opts.SkipExisting {
-		return plan, fmt.Errorf("Restore: --force and --skip-existing are mutually exclusive")
+		return plan, fmt.Errorf("--force and --skip-existing are mutually exclusive")
 	}
 
-	runtimeDir, err := storage.RuntimeDir()
-	if err != nil {
-		return plan, fmt.Errorf("resolve runtime dir: %w", err)
-	}
+	runtimeDir := storage.RuntimeDir()
 	if err := storage.EnsureDir(runtimeDir, 0700); err != nil {
 		return plan, fmt.Errorf("create runtime dir: %w", err)
 	}
@@ -82,10 +67,6 @@ func Restore(mgr *profile.Manager, cfg *config.Config, opts RestoreOptions) (Res
 	if err != nil {
 		return plan, err
 	}
-	plan.SchemaVersion = manifest.SchemaVersion
-	plan.CreatedAt = manifest.CreatedAt
-	plan.SourceVersion = manifest.KubegonfigVersion
-	plan.Encrypted = manifest.Encrypted
 
 	wantedFiles := make(map[string]string, len(manifest.Profiles))
 	for _, p := range manifest.Profiles {
@@ -187,9 +168,6 @@ func Restore(mgr *profile.Manager, cfg *config.Config, opts RestoreOptions) (Res
 					}
 					continue
 				}
-				if hdr.Size > int64(MaxProfileSize) {
-					return fmt.Errorf("archive entry %q exceeds %d byte limit", hdr.Name, MaxProfileSize)
-				}
 				body, err := io.ReadAll(io.LimitReader(tr, MaxProfileSize+1))
 				if err != nil {
 					writeErrs = append(writeErrs, fmt.Errorf("read entry %q: %w", hdr.Name, err))
@@ -280,9 +258,7 @@ func mergeArchivedConfig(local *config.Config, archivedBody []byte) error {
 	var archived struct {
 		GPGRecipients []string `yaml:"gpg_recipients"`
 	}
-	dec := yaml.NewDecoder(bytes.NewReader(archivedBody))
-	dec.KnownFields(false)
-	if err := dec.Decode(&archived); err != nil && !errors.Is(err, io.EOF) {
+	if err := yaml.Unmarshal(archivedBody, &archived); err != nil {
 		return fmt.Errorf("parse archived config: %w", err)
 	}
 	seen := make(map[string]struct{}, len(local.GPGRecipients))

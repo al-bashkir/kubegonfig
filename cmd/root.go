@@ -12,7 +12,6 @@ import (
 	"kubegonfig/internal/config"
 	"kubegonfig/internal/crypto"
 	"kubegonfig/internal/profile"
-	"kubegonfig/internal/tmpfile"
 
 	"github.com/spf13/cobra"
 )
@@ -41,7 +40,7 @@ Or add a helper function to your shell rc file:
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		if skipSetup(cmd, args) {
+		if skipSetup(cmd) {
 			return nil
 		}
 
@@ -70,31 +69,16 @@ Or add a helper function to your shell rc file:
 	},
 }
 
-func skipSetup(cmd *cobra.Command, args []string) bool {
-	if cmd.DisableFlagParsing && isHelpRequest(args) {
-		return true
-	}
+func skipSetup(cmd *cobra.Command) bool {
 	if strings.HasPrefix(cmd.CommandPath(), "kubegonfig completion") {
 		return true
 	}
 	switch cmd.Name() {
-	case "init", "help", "completion", "version", cobra.ShellCompRequestCmd, cobra.ShellCompNoDescRequestCmd:
+	case "init", "help", "version", cobra.ShellCompRequestCmd, cobra.ShellCompNoDescRequestCmd:
 		return true
 	default:
 		return false
 	}
-}
-
-func isHelpRequest(args []string) bool {
-	for _, arg := range args {
-		if arg == "--" {
-			return false
-		}
-		if arg == "-h" || arg == "--help" {
-			return true
-		}
-	}
-	return false
 }
 
 func init() {
@@ -119,25 +103,12 @@ func init() {
 	)
 }
 
-// version is the running binary version, set by SetVersion at startup.
-var version = "dev"
-
 // SetVersion sets the version string shown by --version and recorded in
 // exported archives.
-func SetVersion(v string) {
-	rootCmd.Version = v
-	if v != "" {
-		version = v
-	}
-}
-
-// Version returns the current running version (set by SetVersion).
-func Version() string { return version }
+func SetVersion(v string) { rootCmd.Version = v }
 
 // Execute is the main entry point for the CLI.
 func Execute() {
-	tmpfile.SetupSignalHandler()
-
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %s\n", err)
 		os.Exit(1)

@@ -56,9 +56,6 @@ func Validate(data []byte) error {
 		return fmt.Errorf("invalid YAML: %w", err)
 	}
 
-	if kc.APIVersion == "" {
-		return fmt.Errorf("missing required field: apiVersion")
-	}
 	if kc.APIVersion != "v1" {
 		return fmt.Errorf("unsupported apiVersion: %q (expected \"v1\")", kc.APIVersion)
 	}

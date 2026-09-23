@@ -44,11 +44,6 @@ func Encrypt(data []byte, recipients []string) ([]byte, error) {
 		return nil, fmt.Errorf("at least one GPG recipient is required")
 	}
 
-	bin, err := lookupGPG()
-	if err != nil {
-		return nil, err
-	}
-
 	args := []string{
 		"--batch", "--yes",
 		"--encrypt",
@@ -58,20 +53,7 @@ func Encrypt(data []byte, recipients []string) ([]byte, error) {
 	for _, r := range recipients {
 		args = append(args, "--recipient", r)
 	}
-
-	var stdout, stderr bytes.Buffer
-	cmd := exec.Command(bin, args...)
-	cmd.Stdin = bytes.NewReader(data)
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		// Strip any potential secret data from stderr; only show gpg errors.
-		errMsg := sanitizeGPGError(stderr.String())
-		return nil, fmt.Errorf("gpg encrypt: %s: %w", errMsg, err)
-	}
-
-	return stdout.Bytes(), nil
+	return runGPG("encrypt", data, args...)
 }
 
 func nonBlank(recipients []string) []string {
@@ -86,27 +68,25 @@ func nonBlank(recipients []string) []string {
 
 // Decrypt decrypts GPG-encrypted data. Relies on gpg-agent for passphrase.
 func Decrypt(data []byte) ([]byte, error) {
+	return runGPG("decrypt", data, "--batch", "--yes", "--decrypt")
+}
+
+// runGPG runs gpg with stdin and returns stdout. Stderr is sanitized before it
+// reaches the error so secret data never leaks into user-facing output.
+func runGPG(op string, stdin []byte, args ...string) ([]byte, error) {
 	bin, err := lookupGPG()
 	if err != nil {
 		return nil, err
 	}
 
-	args := []string{
-		"--batch", "--yes",
-		"--decrypt",
-	}
-
 	var stdout, stderr bytes.Buffer
 	cmd := exec.Command(bin, args...)
-	cmd.Stdin = bytes.NewReader(data)
+	cmd.Stdin = bytes.NewReader(stdin)
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-
 	if err := cmd.Run(); err != nil {
-		errMsg := sanitizeGPGError(stderr.String())
-		return nil, fmt.Errorf("gpg decrypt: %s: %w", errMsg, err)
+		return nil, fmt.Errorf("gpg %s: %s: %w", op, sanitizeGPGError(stderr.String()), err)
 	}
-
 	return stdout.Bytes(), nil
 }
 
@@ -119,29 +99,15 @@ type GPGKey struct {
 
 // ListSecretKeys returns all secret keys available in the GPG keyring.
 func ListSecretKeys() ([]GPGKey, error) {
-	bin, err := lookupGPG()
+	out, err := runGPG("list-secret-keys", nil, "--list-secret-keys", "--with-colons", "--keyid-format", "long")
 	if err != nil {
 		return nil, err
-	}
-
-	var stdout, stderr bytes.Buffer
-	cmd := exec.Command(bin,
-		"--list-secret-keys",
-		"--with-colons",
-		"--keyid-format", "long",
-	)
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		errMsg := sanitizeGPGError(stderr.String())
-		return nil, fmt.Errorf("gpg list-secret-keys: %s: %w", errMsg, err)
 	}
 
 	var keys []GPGKey
 	var current *GPGKey
 
-	for _, line := range strings.Split(stdout.String(), "\n") {
+	for _, line := range strings.Split(string(out), "\n") {
 		fields := strings.Split(line, ":")
 		if len(fields) < 10 {
 			continue
