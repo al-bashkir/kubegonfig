@@ -150,7 +150,7 @@ func (m *Manager) List() ([]string, error) {
 			continue
 		}
 		// ponytail: trust readdir d_type; skips a stat per entry. Misses files
-		// on DT_UNKNOWN filesystems (some FUSE) — re-add RegularFileInDir there.
+		// on DT_UNKNOWN filesystems (some FUSE) — re-add a RegularFileMtimeInDir check there.
 		if !e.Type().IsRegular() {
 			continue
 		}
@@ -403,7 +403,8 @@ func (m *Manager) Rename(oldName, newName string) error {
 }
 
 func (m *Manager) profileExists(name string) (bool, error) {
-	return storage.RegularFileInDir(m.profilesPath(), profileFileName(name))
+	_, ok, err := storage.RegularFileMtimeInDir(m.profilesPath(), profileFileName(name))
+	return ok, err
 }
 
 // Exists reports whether a profile with the given name is stored locally.

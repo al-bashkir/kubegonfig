@@ -8,16 +8,11 @@ import (
 	"kubegonfig/internal/tmpfile"
 )
 
-func activeShellStyle(flagValue string) (string, error) {
-	style := flagValue
-	if style == "" {
-		style = cfg.ShellStyle
-	}
-	return shell.NormalizeStyle(style)
-}
-
 func activateProfile(name, shellFlag string) (string, error) {
-	style, err := activeShellStyle(shellFlag)
+	if shellFlag == "" {
+		shellFlag = cfg.ShellStyle
+	}
+	style, err := shell.NormalizeStyle(shellFlag)
 	if err != nil {
 		return "", err
 	}

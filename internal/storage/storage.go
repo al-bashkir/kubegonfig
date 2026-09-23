@@ -283,12 +283,6 @@ func ReadDirInDir(dirPath string) ([]os.DirEntry, error) {
 	return dir.ReadDir(-1)
 }
 
-// RegularFileInDir checks a file entry without following symlinks.
-func RegularFileInDir(dirPath, name string) (bool, error) {
-	_, ok, err := RegularFileMtimeInDir(dirPath, name)
-	return ok, err
-}
-
 // RegularFileMtimeInDir returns the modification time of a regular file inside
 // a verified non-symlink directory. ok is false when the entry is missing or
 // is not a regular file (symlink, directory, device, socket, FIFO).
