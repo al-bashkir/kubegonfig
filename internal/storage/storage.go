@@ -21,27 +21,20 @@ import (
 const appName = "kubegonfig"
 
 // DataDir returns the XDG_DATA_HOME/kubegonfig path.
-func DataDir() (string, error) {
-	base := os.Getenv("XDG_DATA_HOME")
-	if base == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", fmt.Errorf("resolve home dir: %w", err)
-		}
-		base = filepath.Join(home, ".local", "share")
-	}
-	return filepath.Join(base, appName), nil
-}
+func DataDir() (string, error) { return xdgDir("XDG_DATA_HOME", ".local", "share") }
 
 // ConfigDir returns the XDG_CONFIG_HOME/kubegonfig path.
-func ConfigDir() (string, error) {
-	base := os.Getenv("XDG_CONFIG_HOME")
+func ConfigDir() (string, error) { return xdgDir("XDG_CONFIG_HOME", ".config") }
+
+// xdgDir returns $env/kubegonfig, or $HOME/<fallback...>/kubegonfig when env is unset.
+func xdgDir(env string, fallback ...string) (string, error) {
+	base := os.Getenv(env)
 	if base == "" {
 		home, err := os.UserHomeDir()
 		if err != nil {
 			return "", fmt.Errorf("resolve home dir: %w", err)
 		}
-		base = filepath.Join(home, ".config")
+		base = filepath.Join(append([]string{home}, fallback...)...)
 	}
 	return filepath.Join(base, appName), nil
 }
@@ -60,21 +53,28 @@ func RuntimeDir() string {
 // EnsureDir creates a directory with the given permissions if it does not exist.
 // It also verifies the directory has correct ownership on non-Windows systems.
 func EnsureDir(path string, perm os.FileMode) error {
-	if err := os.MkdirAll(path, perm); err != nil {
-		return fmt.Errorf("create directory %s: %w", path, err)
-	}
-	dir, err := openVerifiedDir(path)
+	dir, err := openEnsuredDir(path, perm)
 	if err != nil {
 		return err
 	}
-	defer func() {
-		_ = dir.Close()
-	}()
+	return dir.Close()
+}
 
-	if err := dir.Chmod(perm); err != nil {
-		return fmt.Errorf("chmod %s: %w", path, err)
+// openEnsuredDir creates path if needed, returns it opened and verified, and
+// enforces perm on it.
+func openEnsuredDir(path string, perm os.FileMode) (*os.File, error) {
+	if err := os.MkdirAll(path, perm); err != nil {
+		return nil, fmt.Errorf("create directory %s: %w", path, err)
 	}
-	return nil
+	dir, err := openVerifiedDir(path)
+	if err != nil {
+		return nil, err
+	}
+	if err := dir.Chmod(perm); err != nil {
+		_ = dir.Close()
+		return nil, fmt.Errorf("chmod %s: %w", path, err)
+	}
+	return dir, nil
 }
 
 func openDirNoFollow(path string) (*os.File, error) {
@@ -98,12 +98,6 @@ func validateOpenDir(path string, dir *os.File) error {
 		return fmt.Errorf("directory %s is not owned by current user", path)
 	}
 	return nil
-}
-
-// AtomicWrite writes data to a file atomically using a temp-file + rename
-// strategy. This prevents partial writes from corrupting existing files.
-func AtomicWrite(path string, data []byte, perm os.FileMode) error {
-	return AtomicWriteInDir(filepath.Dir(path), filepath.Base(path), data, perm)
 }
 
 // RemoveFileInDir removes a file relative to a verified non-symlink directory.
@@ -171,43 +165,21 @@ func AtomicWriteStream(dirPath, name string, perm os.FileMode, fn func(io.Writer
 	if err := validateRelativeFileName(name); err != nil {
 		return err
 	}
-	if err := EnsureDir(dirPath, 0700); err != nil {
-		return err
-	}
-	dir, err := openVerifiedDir(dirPath)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		_ = dir.Close()
-	}()
-
-	tmpName, tmp, err := createTempFileInDir(dir, dirPath, ".tmp-", "", perm)
-	if err != nil {
-		return err
-	}
-	success := false
-	defer func() {
-		if !success {
-			_ = tmp.Close()
-			_ = unix.Unlinkat(int(dir.Fd()), tmpName, 0)
+	return withTempFileInDir(dirPath, ".tmp-", "", perm, func(dir, tmp *os.File, tmpName string) error {
+		if err := fn(tmp); err != nil {
+			return err
 		}
-	}()
-
-	if err := fn(tmp); err != nil {
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		return fmt.Errorf("sync temp file: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		return fmt.Errorf("close temp file: %w", err)
-	}
-	if err := unix.Renameat(int(dir.Fd()), tmpName, int(dir.Fd()), name); err != nil {
-		return fmt.Errorf("rename %s -> %s: %w", filepath.Join(dirPath, tmpName), filepath.Join(dirPath, name), err)
-	}
-	success = true
-	return syncDir(dir, dirPath)
+		if err := tmp.Sync(); err != nil {
+			return fmt.Errorf("sync temp file: %w", err)
+		}
+		if err := tmp.Close(); err != nil {
+			return fmt.Errorf("close temp file: %w", err)
+		}
+		if err := unix.Renameat(int(dir.Fd()), tmpName, int(dir.Fd()), name); err != nil {
+			return fmt.Errorf("rename %s -> %s: %w", filepath.Join(dirPath, tmpName), filepath.Join(dirPath, name), err)
+		}
+		return syncDir(dir, dirPath)
+	})
 }
 
 // OpenUnlinkedTempFileInDir writes data to a temporary file in a verified
@@ -216,12 +188,33 @@ func OpenUnlinkedTempFileInDir(dirPath, prefix, suffix string, data []byte, perm
 	if err := validateRelativeFileName(prefix + "x" + suffix); err != nil {
 		return nil, err
 	}
-	if err := EnsureDir(dirPath, 0700); err != nil {
-		return nil, err
-	}
-	dir, err := openVerifiedDir(dirPath)
+	var out *os.File
+	err := withTempFileInDir(dirPath, prefix, suffix, perm, func(dir, tmp *os.File, tmpName string) error {
+		if _, err := tmp.Write(data); err != nil {
+			return fmt.Errorf("write temp file: %w", err)
+		}
+		if _, err := tmp.Seek(0, 0); err != nil {
+			return fmt.Errorf("rewind temp file: %w", err)
+		}
+		if err := unix.Unlinkat(int(dir.Fd()), tmpName, 0); err != nil {
+			return fmt.Errorf("unlink %s: %w", filepath.Join(dirPath, tmpName), err)
+		}
+		if err := syncDir(dir, dirPath); err != nil {
+			return err
+		}
+		out = tmp
+		return nil
+	})
+	return out, err
+}
+
+// withTempFileInDir creates a temp file in dirPath (created 0700 if missing)
+// and passes fn the verified dir handle, the temp file, and its name. If fn
+// fails, the temp file is closed and unlinked.
+func withTempFileInDir(dirPath, prefix, suffix string, perm os.FileMode, fn func(dir, tmp *os.File, tmpName string) error) error {
+	dir, err := openEnsuredDir(dirPath, 0700)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer func() {
 		_ = dir.Close()
@@ -229,31 +222,14 @@ func OpenUnlinkedTempFileInDir(dirPath, prefix, suffix string, data []byte, perm
 
 	tmpName, tmp, err := createTempFileInDir(dir, dirPath, prefix, suffix, perm)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	success := false
-	defer func() {
-		if !success {
-			_ = tmp.Close()
-			_ = unix.Unlinkat(int(dir.Fd()), tmpName, 0)
-		}
-	}()
-
-	if _, err := tmp.Write(data); err != nil {
-		return nil, fmt.Errorf("write temp file: %w", err)
+	if err := fn(dir, tmp, tmpName); err != nil {
+		_ = tmp.Close()
+		_ = unix.Unlinkat(int(dir.Fd()), tmpName, 0)
+		return err
 	}
-	if _, err := tmp.Seek(0, 0); err != nil {
-		return nil, fmt.Errorf("rewind temp file: %w", err)
-	}
-	if err := unix.Unlinkat(int(dir.Fd()), tmpName, 0); err != nil {
-		return nil, fmt.Errorf("unlink %s: %w", filepath.Join(dirPath, tmpName), err)
-	}
-	if err := syncDir(dir, dirPath); err != nil {
-		return nil, err
-	}
-
-	success = true
-	return tmp, nil
+	return nil
 }
 
 // ReadFileInDir reads a file relative to a verified non-symlink directory.
@@ -404,10 +380,7 @@ func WithLock(path string, fn func() error) (err error) {
 	if err := validateRelativeFileName(name); err != nil {
 		return err
 	}
-	if err := EnsureDir(dirPath, 0700); err != nil {
-		return err
-	}
-	dir, err := openVerifiedDir(dirPath)
+	dir, err := openEnsuredDir(dirPath, 0700)
 	if err != nil {
 		return err
 	}

@@ -70,14 +70,14 @@ func ParseManifest(data []byte) (*Manifest, error) {
 	if err := dec.Decode(&m); err != nil {
 		return nil, fmt.Errorf("parse manifest: %w", err)
 	}
-	if err := m.Validate(); err != nil {
+	if err := m.validate(); err != nil {
 		return nil, err
 	}
 	return &m, nil
 }
 
-// Validate checks the manifest's internal invariants.
-func (m *Manifest) Validate() error {
+// validate checks the manifest's internal invariants.
+func (m *Manifest) validate() error {
 	if m.SchemaVersion < 1 {
 		return fmt.Errorf("manifest schema_version %d is invalid", m.SchemaVersion)
 	}

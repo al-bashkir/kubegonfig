@@ -33,8 +33,8 @@ type Config struct {
 	// ShellStyle controls output format: "posix" (default) or "fish".
 	ShellStyle string `yaml:"shell_style,omitempty"`
 
-	// path is the resolved config file path (not serialized).
-	path string `yaml:"-"`
+	// Path is the resolved config file path (not serialized).
+	Path string `yaml:"-"`
 }
 
 // Load reads the config file. Returns a default Config if the file does not exist.
@@ -45,7 +45,7 @@ func Load() (*Config, error) {
 	}
 
 	path := filepath.Join(dir, "config.yaml")
-	cfg := &Config{path: path}
+	cfg := &Config{Path: path}
 
 	data, err := storage.ReadFileInDir(dir, "config.yaml")
 	if err != nil {
@@ -60,7 +60,6 @@ func Load() (*Config, error) {
 	if err := decoder.Decode(cfg); err != nil {
 		return nil, fmt.Errorf("parse config %s: %w", path, err)
 	}
-	cfg.path = path
 	if _, err := shell.NormalizeStyle(cfg.ShellStyle); err != nil {
 		return nil, fmt.Errorf("validate config %s: %w", path, err)
 	}
@@ -76,16 +75,8 @@ func (c *Config) Save() error {
 	if err != nil {
 		return fmt.Errorf("marshal config: %w", err)
 	}
-	return storage.AtomicWrite(c.path, data, 0600)
+	return storage.AtomicWriteInDir(filepath.Dir(c.Path), filepath.Base(c.Path), data, 0600)
 }
-
-// Path returns the resolved config file path.
-func (c *Config) Path() string {
-	return c.path
-}
-
-// SetPathForTest assigns the resolved config file path. Test-only.
-func (c *Config) SetPathForTest(path string) { c.path = path }
 
 // Recipients returns the list of GPG recipients for encryption.
 // The primary recipient is always included first.

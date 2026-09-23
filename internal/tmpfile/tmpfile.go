@@ -24,18 +24,12 @@ func Create(name string, data []byte) (string, error) {
 		return "", err
 	}
 
-	dir := storage.RuntimeDir()
-	if err := storage.EnsureDir(dir, 0700); err != nil {
-		return "", fmt.Errorf("create runtime dir: %w", err)
-	}
-
 	// Use a predictable name so repeated activations reuse the same path.
-	path := filepath.Join(dir, name+".yaml")
-
-	if err := storage.AtomicWrite(path, data, 0600); err != nil {
+	dir := storage.RuntimeDir()
+	if err := storage.AtomicWriteInDir(dir, name+".yaml", data, 0600); err != nil {
 		return "", fmt.Errorf("write temp kubeconfig: %w", err)
 	}
-	return path, nil
+	return filepath.Join(dir, name+".yaml"), nil
 }
 
 // ProbeCached reports whether the plaintext activation file for name is fresh
@@ -92,14 +86,9 @@ func CleanupStale() (int, error) {
 
 	count := 0
 	for _, e := range entries {
-		if !isKubeconfigTempName(e.Name()) {
-			continue
-		}
-		regular, err := storage.RegularFileInDir(dir, e.Name())
-		if err != nil {
-			return count, fmt.Errorf("check %s: %w", filepath.Join(dir, e.Name()), err)
-		}
-		if !regular {
+		// ponytail: trust readdir d_type like profile.List; misses files on
+		// DT_UNKNOWN filesystems (some FUSE).
+		if !isKubeconfigTempName(e.Name()) || !e.Type().IsRegular() {
 			continue
 		}
 		if err := storage.RemoveFileInDir(dir, e.Name()); err != nil {
