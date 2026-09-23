@@ -32,11 +32,11 @@ safe shell integration for switching between Kubernetes contexts.
 A child process cannot modify the parent shell's environment directly.
 Use eval or a shell wrapper function to export KUBECONFIG:
 
-  eval "$(kubegonfig env my-cluster)"
+  eval "$(kubegonfig use my-cluster)"
 
 Or add a helper function to your shell rc file:
 
-  kuse() { eval "$(kubegonfig env "$1")"; }`,
+  kuse() { eval "$(kubegonfig use "$1")"; }`,
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
@@ -87,13 +87,11 @@ func init() {
 	rootCmd.AddCommand(
 		initCmd,
 		createCmd,
-		importCmd,
 		listCmd,
 		useCmd,
 		currentCmd,
 		deleteCmd,
 		renameCmd,
-		envCmd,
 		execCmd,
 		editCmd,
 		cleanupCmd,

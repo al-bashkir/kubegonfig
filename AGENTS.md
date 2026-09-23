@@ -97,7 +97,7 @@ and uses shell output so callers can opt in to environment changes.
   on Linux and `/dev/fd/3` on other Unix-like release targets).
 - `exec` temp-file creation and unlinking should use descriptor-relative
   operations against the same verified runtime directory handle.
-- `env` / `use` activation files may remain in the runtime directory so the
+- `use` activation files may remain in the runtime directory so the
   caller's shell can keep using them; `cleanup` is responsible for stale files.
 - Runtime cleanup must only remove valid profile-name-shaped `*.yaml` activation
   files from the app runtime directory.
