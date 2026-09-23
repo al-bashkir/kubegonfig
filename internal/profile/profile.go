@@ -123,15 +123,6 @@ func (m *Manager) Create(name string, data []byte) error {
 	})
 }
 
-// Import reads a kubeconfig from a file path, validates, encrypts, and stores it.
-func (m *Manager) Import(name, path string) error {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return fmt.Errorf("read file %s: %w", path, err)
-	}
-	return m.Create(name, data)
-}
-
 // List returns sorted profile names.
 func (m *Manager) List() ([]string, error) {
 	dir := m.profilesPath()
