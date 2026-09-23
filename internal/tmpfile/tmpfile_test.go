@@ -14,7 +14,6 @@ import (
 func TestCreateAndCleanup(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("XDG_RUNTIME_DIR", tmp)
-	resetTracked(t)
 
 	data := []byte("apiVersion: v1\nkind: Config\n")
 
@@ -47,11 +46,11 @@ func TestCreateAndCleanup(t *testing.T) {
 		t.Errorf("filename = %q, want %q", filepath.Base(path), expectedName)
 	}
 
-	// Cleanup should remove the file.
-	CleanupAll()
-
+	if err := Remove(path); err != nil {
+		t.Fatalf("Remove() error: %v", err)
+	}
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
-		t.Error("file should not exist after CleanupAll")
+		t.Error("file should not exist after Remove")
 	}
 }
 
@@ -66,7 +65,6 @@ func TestOpenUnlinked(t *testing.T) {
 	tmp := t.TempDir()
 	runtimeDir := filepath.Join(tmp, "kubegonfig")
 	t.Setenv("XDG_RUNTIME_DIR", tmp)
-	resetTracked(t)
 
 	data := []byte("apiVersion: v1\nkind: Config\n")
 	f, err := OpenUnlinked("exec-profile", data)
@@ -91,13 +89,6 @@ func TestOpenUnlinked(t *testing.T) {
 	}
 	if len(entries) != 0 {
 		t.Fatalf("runtime dir contains %d entries, want 0", len(entries))
-	}
-
-	trackedMu.Lock()
-	count := len(tracked)
-	trackedMu.Unlock()
-	if count != 0 {
-		t.Errorf("tracked count = %d, want 0", count)
 	}
 }
 
@@ -136,7 +127,6 @@ func TestOpenUnlinkedRejectsSymlinkedRuntimeDir(t *testing.T) {
 func TestRemove(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("XDG_RUNTIME_DIR", tmp)
-	resetTracked(t)
 
 	path, err := Create("remove-me", []byte("data"))
 	if err != nil {
@@ -168,10 +158,9 @@ func TestRemoveRejectsPathOutsideRuntimeDir(t *testing.T) {
 	}
 }
 
-func TestRemove_UntracksPath(t *testing.T) {
+func TestRemove_DeletesFile(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("XDG_RUNTIME_DIR", tmp)
-	resetTracked(t)
 
 	path, err := Create("remove-me", []byte("data"))
 	if err != nil {
@@ -180,12 +169,8 @@ func TestRemove_UntracksPath(t *testing.T) {
 	if err := Remove(path); err != nil {
 		t.Fatalf("Remove() error: %v", err)
 	}
-
-	trackedMu.Lock()
-	count := len(tracked)
-	trackedMu.Unlock()
-	if count != 0 {
-		t.Errorf("tracked count after Remove = %d, want 0", count)
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Errorf("file should not exist after Remove: %v", err)
 	}
 }
 
@@ -291,77 +276,6 @@ func TestCleanupStale_SkipsDirectories(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(runtimeDir, "subdir")); os.IsNotExist(err) {
 		t.Error("subdirectory should not be removed")
 	}
-}
-
-func TestCreate_MultipleTracked(t *testing.T) {
-	tmp := t.TempDir()
-	t.Setenv("XDG_RUNTIME_DIR", tmp)
-
-	// Reset tracked state.
-	trackedMu.Lock()
-	tracked = nil
-	trackedMu.Unlock()
-
-	for _, name := range []string{"profile-a", "profile-b"} {
-		_, err := Create(name, []byte("data"))
-		if err != nil {
-			t.Fatalf("Create(%q) error: %v", name, err)
-		}
-	}
-
-	trackedMu.Lock()
-	count := len(tracked)
-	trackedMu.Unlock()
-
-	if count != 2 {
-		t.Errorf("tracked count = %d, want 2", count)
-	}
-
-	CleanupAll()
-
-	trackedMu.Lock()
-	count = len(tracked)
-	trackedMu.Unlock()
-
-	if count != 0 {
-		t.Errorf("tracked count after cleanup = %d, want 0", count)
-	}
-}
-
-func TestCleanupAllKeepsTrackedPathAfterRemoveFailure(t *testing.T) {
-	tmp := t.TempDir()
-	t.Setenv("XDG_RUNTIME_DIR", tmp)
-	resetTracked(t)
-
-	path, err := Create("retry-me", []byte("data"))
-	if err != nil {
-		t.Fatalf("Create() error: %v", err)
-	}
-	runtimeDir := filepath.Dir(path)
-	if err := os.Remove(path); err != nil {
-		t.Fatalf("remove temp file: %v", err)
-	}
-	if err := os.Remove(runtimeDir); err != nil {
-		t.Fatalf("remove runtime dir: %v", err)
-	}
-	if err := os.WriteFile(runtimeDir, []byte("not a directory"), 0600); err != nil {
-		t.Fatalf("replace runtime dir with file: %v", err)
-	}
-
-	CleanupAll()
-
-	trackedMu.Lock()
-	defer trackedMu.Unlock()
-	if len(tracked) != 1 || tracked[0] != path {
-		t.Fatalf("tracked = %v, want retained failed cleanup path %q", tracked, path)
-	}
-}
-
-func resetTracked(t *testing.T) {
-	t.Helper()
-	trackedMu.Lock()
-	tracked = nil
-	trackedMu.Unlock()
 }
 
 func TestProbeCachedHit(t *testing.T) {
@@ -492,40 +406,5 @@ func TestProbeCachedInvalidName(t *testing.T) {
 
 	if _, _, err := ProbeCached("../bad", time.Now()); err == nil {
 		t.Fatal("ProbeCached() error = nil, want validation error")
-	}
-}
-
-func TestProbeCachedDoesNotTrackOnHit(t *testing.T) {
-	tmp := t.TempDir()
-	t.Setenv("XDG_RUNTIME_DIR", tmp)
-	resetTracked(t)
-	runtimeDir := filepath.Join(tmp, "kubegonfig")
-	if err := os.MkdirAll(runtimeDir, 0700); err != nil {
-		t.Fatalf("mkdir runtime: %v", err)
-	}
-	plaintext := filepath.Join(runtimeDir, "prod.yaml")
-	if err := os.WriteFile(plaintext, []byte("hi"), 0600); err != nil {
-		t.Fatalf("write plaintext: %v", err)
-	}
-	plaintextMtime := time.Now()
-	cipherMtime := plaintextMtime.Add(-time.Hour)
-	if err := os.Chtimes(plaintext, plaintextMtime, plaintextMtime); err != nil {
-		t.Fatalf("chtimes: %v", err)
-	}
-
-	if _, hit, err := ProbeCached("prod", cipherMtime); err != nil || !hit {
-		t.Fatalf("ProbeCached() hit=%v err=%v, want hit=true", hit, err)
-	}
-
-	trackedMu.Lock()
-	got := append([]string(nil), tracked...)
-	trackedMu.Unlock()
-	if len(got) != 0 {
-		t.Errorf("tracked = %v, want empty after cache hit", got)
-	}
-
-	CleanupAll()
-	if _, err := os.Stat(plaintext); err != nil {
-		t.Errorf("plaintext removed by CleanupAll after ProbeCached hit: %v", err)
 	}
 }

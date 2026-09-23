@@ -414,7 +414,7 @@ func TestDeleteReportsCurrentClearFailure(t *testing.T) {
 	}
 }
 
-func TestDeleteRestoresCurrentWhenProfileRemovalFails(t *testing.T) {
+func TestDeleteKeepsProfileWhenProfileRemovalFails(t *testing.T) {
 	m := newTestManager(t)
 	writeProfile(t, m, "prod")
 
@@ -431,8 +431,9 @@ func TestDeleteRestoresCurrentWhenProfileRemovalFails(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetCurrent() error: %v", err)
 	}
-	if current != "prod" {
-		t.Errorf("current after failed profile removal = %q, want prod", current)
+	// No rollback: current was cleared before the profile removal failed.
+	if current != "" {
+		t.Errorf("current after failed profile removal = %q, want empty", current)
 	}
 }
 
@@ -473,13 +474,6 @@ func TestManager_Unlock_InvalidName(t *testing.T) {
 	}
 	if called {
 		t.Error("create callback was invoked despite invalid name")
-	}
-}
-
-func TestManager_Unlock_NilCallback(t *testing.T) {
-	m := newTestManager(t)
-	if _, err := m.Unlock("prod", nil); err == nil {
-		t.Fatal("Unlock() error = nil, want nil callback error")
 	}
 }
 

@@ -46,10 +46,7 @@ func Edit(initialContent []byte) ([]byte, error) {
 
 	// Create the temp file in the app-owned runtime dir (0700) so decrypted
 	// plaintext never lands in shared /tmp. MkdirTemp creates the dir 0700.
-	runtimeDir, err := storage.RuntimeDir()
-	if err != nil {
-		return nil, fmt.Errorf("resolve runtime dir: %w", err)
-	}
+	runtimeDir := storage.RuntimeDir()
 	if err := storage.EnsureDir(runtimeDir, 0700); err != nil {
 		return nil, fmt.Errorf("create runtime dir: %w", err)
 	}

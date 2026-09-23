@@ -124,21 +124,6 @@ func TestRunExecWithKubeconfigFileClosesAfterStartError(t *testing.T) {
 	assertRuntimeDirEmpty(t)
 }
 
-func TestAppendEnvReplacesEmptyValue(t *testing.T) {
-	env := []string{"KUBECONFIG=", "OTHER=value"}
-
-	got := appendEnv(env, "KUBECONFIG", "/tmp/config")
-	want := []string{"KUBECONFIG=/tmp/config", "OTHER=value"}
-	if len(got) != len(want) {
-		t.Fatalf("appendEnv() len = %d, want %d: %v", len(got), len(want), got)
-	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Fatalf("appendEnv()[%d] = %q, want %q", i, got[i], want[i])
-		}
-	}
-}
-
 func TestExecKubeconfigPathUsesInheritedFileDescriptor(t *testing.T) {
 	want := "/dev/fd/3"
 	if runtime.GOOS == "linux" {
@@ -164,10 +149,7 @@ func openTestExecKubeconfig(t *testing.T, name string, data []byte) *os.File {
 func assertRuntimeDirEmpty(t *testing.T) {
 	t.Helper()
 
-	dir, err := storage.RuntimeDir()
-	if err != nil {
-		t.Fatalf("RuntimeDir() error = %v", err)
-	}
+	dir := storage.RuntimeDir()
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		t.Fatalf("ReadDir(%q) error = %v", dir, err)

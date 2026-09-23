@@ -43,10 +43,6 @@ preview the plan without writing.`,
 }
 
 func runRestore(archive string) error {
-	if restoreForce && restoreSkipExisting {
-		return fmt.Errorf("--force and --skip-existing are mutually exclusive")
-	}
-
 	var in *os.File
 	if archive == "-" {
 		in = os.Stdin

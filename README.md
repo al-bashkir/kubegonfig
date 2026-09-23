@@ -7,7 +7,6 @@ Secure kubeconfig profile manager. Stores profiles encrypted with GPG, decrypts 
 - GPG encryption at rest using your existing keyring
 - XDG Base Directory compliant storage
 - Atomic writes with file locking and fsync
-- Signal cleanup for temp files created by the running process
 - Shell integration for bash, zsh, and fish
 - Profile name validation against path traversal and injection
 - Process isolation via `exec` with an unlinked kubeconfig file descriptor

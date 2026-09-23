@@ -24,15 +24,6 @@ var validNameRe = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$`)
 // and in shell commands. Rejects path traversal, shell metacharacters,
 // and empty/blank names.
 func ValidateName(name string) error {
-	if name == "" {
-		return fmt.Errorf("profile name must not be empty")
-	}
-	if name == "." || name == ".." {
-		return fmt.Errorf("profile name %q is not allowed", name)
-	}
-	if strings.ContainsAny(name, "/\\") {
-		return fmt.Errorf("profile name %q contains path separator", name)
-	}
 	if !validNameRe.MatchString(name) {
 		return fmt.Errorf("profile name %q is invalid: must start with alphanumeric, "+
 			"contain only [a-zA-Z0-9._-], and be 1-64 characters", name)
@@ -44,14 +35,6 @@ func ValidateName(name string) error {
 // Single quotes within the value are escaped as '\” (end quote, escaped quote, start quote).
 func EscapePosix(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
-}
-
-func formatExport(key, value string) string {
-	return fmt.Sprintf("export %s=%s", key, EscapePosix(value))
-}
-
-func formatFishSet(key, value string) string {
-	return fmt.Sprintf("set -gx %s %s", key, EscapePosix(value))
 }
 
 // NormalizeStyle validates a shell output style and applies the default.
@@ -75,8 +58,8 @@ func FormatSet(style, key, value string) (string, error) {
 	}
 	switch style {
 	case StyleFish:
-		return formatFishSet(key, value), nil
+		return fmt.Sprintf("set -gx %s %s", key, EscapePosix(value)), nil
 	default:
-		return formatExport(key, value), nil
+		return fmt.Sprintf("export %s=%s", key, EscapePosix(value)), nil
 	}
 }

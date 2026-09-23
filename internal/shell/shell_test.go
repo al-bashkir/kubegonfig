@@ -79,7 +79,7 @@ func TestEscapePosix(t *testing.T) {
 }
 
 func TestFormatExportCommand(t *testing.T) {
-	got := formatExport("KUBECONFIG", "/tmp/my config")
+	got, _ := FormatSet(StylePosix, "KUBECONFIG", "/tmp/my config")
 	want := "export KUBECONFIG='/tmp/my config'"
 	if got != want {
 		t.Errorf("FormatExport = %q, want %q", got, want)
@@ -87,7 +87,7 @@ func TestFormatExportCommand(t *testing.T) {
 }
 
 func TestFormatFishSetCommand(t *testing.T) {
-	got := formatFishSet("KUBECONFIG", "/tmp/config")
+	got, _ := FormatSet(StyleFish, "KUBECONFIG", "/tmp/config")
 	want := "set -gx KUBECONFIG '/tmp/config'"
 	if got != want {
 		t.Errorf("FormatFishSet = %q, want %q", got, want)
