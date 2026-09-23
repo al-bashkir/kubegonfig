@@ -413,7 +413,7 @@ func TestRenameFileInDirRejectsInvalidNames(t *testing.T) {
 	}
 }
 
-func TestRegularFileInDirSkipsSymlinkAndFIFO(t *testing.T) {
+func TestRegularFileMtimeInDirSkipsSymlinkAndFIFO(t *testing.T) {
 	tmp := t.TempDir()
 	if err := os.WriteFile(filepath.Join(tmp, "regular"), []byte("data"), 0600); err != nil {
 		t.Fatalf("WriteFile() error: %v", err)
@@ -435,12 +435,12 @@ func TestRegularFileInDirSkipsSymlinkAndFIFO(t *testing.T) {
 		{name: "missing", want: false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := RegularFileInDir(tmp, tc.name)
+			_, got, err := RegularFileMtimeInDir(tmp, tc.name)
 			if err != nil {
-				t.Fatalf("RegularFileInDir() error: %v", err)
+				t.Fatalf("RegularFileMtimeInDir() error: %v", err)
 			}
 			if got != tc.want {
-				t.Fatalf("RegularFileInDir() = %v, want %v", got, tc.want)
+				t.Fatalf("RegularFileMtimeInDir() ok = %v, want %v", got, tc.want)
 			}
 		})
 	}
