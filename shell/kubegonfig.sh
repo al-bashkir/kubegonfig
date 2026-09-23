@@ -1,6 +1,6 @@
-# kubegonfig shell integration for bash
-# Source this file from .bashrc:
-#   source /path/to/kubegonfig/shell/kubegonfig.bash
+# kubegonfig shell integration for bash and zsh
+# Source this file from .bashrc or .zshrc:
+#   source /path/to/kubegonfig/shell/kubegonfig.sh
 #
 # This wraps the kubegonfig binary so that the 'use' subcommand
 # is eval'd in the current shell, allowing KUBECONFIG export to take effect.

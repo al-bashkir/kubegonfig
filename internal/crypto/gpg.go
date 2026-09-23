@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"fmt"
 	"os/exec"
+	"regexp"
 	"strings"
 )
 
@@ -30,10 +31,9 @@ func LookupGPG() (string, error) {
 }
 
 // Encrypt encrypts data for the given recipients using GPG. At least one
-// non-blank recipient must be specified; callers (config.Recipients) already
-// trim and deduplicate. Blank entries are dropped here as a fail-closed guard.
+// recipient must be specified; callers pass config.Recipients, which trims,
+// drops blanks, and deduplicates.
 func Encrypt(data []byte, recipients []string) ([]byte, error) {
-	recipients = nonBlank(recipients)
 	if len(recipients) == 0 {
 		return nil, fmt.Errorf("at least one GPG recipient is required")
 	}
@@ -48,16 +48,6 @@ func Encrypt(data []byte, recipients []string) ([]byte, error) {
 		args = append(args, "--recipient", r)
 	}
 	return runGPG("encrypt", data, args...)
-}
-
-func nonBlank(recipients []string) []string {
-	out := make([]string, 0, len(recipients))
-	for _, r := range recipients {
-		if strings.TrimSpace(r) != "" {
-			out = append(out, r)
-		}
-	}
-	return out
 }
 
 // Decrypt decrypts GPG-encrypted data. Relies on gpg-agent for passphrase.
@@ -156,7 +146,7 @@ func isSafeGPGDiagnostic(line string) bool {
 		return false
 	}
 	lower := strings.ToLower(line)
-	if looksSensitiveGPGLine(lower) || looksBase64Line(line) {
+	if looksSensitiveGPGLine(lower) || base64LineRe.MatchString(line) {
 		return false
 	}
 	if strings.HasPrefix(lower, "gpg:") {
@@ -192,18 +182,4 @@ func looksSensitiveGPGLine(lower string) bool {
 	return false
 }
 
-func looksBase64Line(line string) bool {
-	if len(line) < 80 {
-		return false
-	}
-	for _, r := range line {
-		if (r >= 'a' && r <= 'z') ||
-			(r >= 'A' && r <= 'Z') ||
-			(r >= '0' && r <= '9') ||
-			r == '+' || r == '/' || r == '=' {
-			continue
-		}
-		return false
-	}
-	return true
-}
+var base64LineRe = regexp.MustCompile(`^[A-Za-z0-9+/=]{80,}$`)

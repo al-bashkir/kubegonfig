@@ -4,7 +4,6 @@
 package profile
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -15,6 +14,7 @@ import (
 	"time"
 
 	"kubegonfig/internal/config"
+	"kubegonfig/internal/storage"
 )
 
 func TestListProfiles(t *testing.T) {
@@ -132,99 +132,6 @@ func TestEditHoldsLockDuringCallback(t *testing.T) {
 	}
 	if err := waitForResult(t, lockDone, "WithLock after edit callback exits"); err != nil {
 		t.Fatalf("WithLock() error = %v", err)
-	}
-}
-
-func TestActivateHoldsLockDuringCreateCallback(t *testing.T) {
-	installFakeGPG(t)
-	m := newTestManager(t)
-	writePlaintextProfile(t, m, "prod")
-
-	entered := make(chan struct{})
-	release := make(chan struct{})
-	createdPath := filepath.Join(t.TempDir(), "prod.yaml")
-	activateDone := make(chan error, 1)
-	go func() {
-		path, err := m.Activate("prod",
-			func(name string, cipherMtime time.Time) (string, bool, error) {
-				return "", false, nil
-			},
-			func(data []byte) (string, error) {
-				close(entered)
-				<-release
-				return createdPath, nil
-			}, nil)
-		if err == nil && path == "" {
-			err = fmt.Errorf("Activate() path is empty")
-		}
-		activateDone <- err
-	}()
-
-	waitForEntry(t, entered, activateDone, "Activate callback")
-	lockDone := make(chan error, 1)
-	go func() {
-		lockDone <- m.WithLock(func() error { return nil })
-	}()
-
-	assertStillBlocked(t, lockDone, "WithLock while activation callback is active")
-	close(release)
-	if err := waitForResult(t, activateDone, "Activate"); err != nil {
-		t.Fatalf("Activate() error = %v", err)
-	}
-	if err := waitForResult(t, lockDone, "WithLock after activation callback exits"); err != nil {
-		t.Fatalf("WithLock() error = %v", err)
-	}
-}
-
-func TestActivateCleansUpCreatedPathOnCurrentUpdateFailure(t *testing.T) {
-	installFakeGPG(t)
-	m := newTestManager(t)
-	writePlaintextProfile(t, m, "prod")
-	setCurrentForTest(t, m, "prod")
-	replaceStateDirWithSymlink(t, m)
-
-	createdPath := filepath.Join(t.TempDir(), "prod.yaml")
-	cleanedPath := ""
-	_, err := m.Activate("prod",
-		func(name string, cipherMtime time.Time) (string, bool, error) {
-			return "", false, nil
-		},
-		func(data []byte) (string, error) {
-			return createdPath, nil
-		}, func(path string) error {
-			cleanedPath = path
-			return nil
-		})
-	if err == nil {
-		t.Fatal("Activate() error = nil, want current update error")
-	}
-	if cleanedPath != createdPath {
-		t.Fatalf("cleanup path = %q, want %q", cleanedPath, createdPath)
-	}
-}
-
-func TestActivateReportsCleanupFailureAfterCurrentUpdateFailure(t *testing.T) {
-	installFakeGPG(t)
-	m := newTestManager(t)
-	writePlaintextProfile(t, m, "prod")
-	setCurrentForTest(t, m, "prod")
-	replaceStateDirWithSymlink(t, m)
-
-	cleanupErr := errors.New("cleanup failed")
-	_, err := m.Activate("prod",
-		func(name string, cipherMtime time.Time) (string, bool, error) {
-			return "", false, nil
-		},
-		func(data []byte) (string, error) {
-			return filepath.Join(t.TempDir(), "prod.yaml"), nil
-		}, func(path string) error {
-			return cleanupErr
-		})
-	if err == nil {
-		t.Fatal("Activate() error = nil, want current update and cleanup error")
-	}
-	if !errors.Is(err, cleanupErr) {
-		t.Fatalf("Activate() error does not wrap cleanup error: %v", err)
 	}
 }
 
@@ -437,100 +344,9 @@ func TestDeleteKeepsProfileWhenProfileRemovalFails(t *testing.T) {
 	}
 }
 
-func TestManager_Unlock(t *testing.T) {
-	installFakeGPG(t)
-	m := newTestManager(t)
-	writePlaintextProfile(t, m, "prod")
-
-	wantPath := filepath.Join(t.TempDir(), "prod.yaml")
-	var gotData []byte
-	gotPath, err := m.Unlock("prod", func(data []byte) (string, error) {
-		gotData = append(gotData[:0], data...)
-		return wantPath, nil
-	})
-	if err != nil {
-		t.Fatalf("Unlock() error = %v", err)
-	}
-	if gotPath != wantPath {
-		t.Errorf("Unlock() path = %q, want %q", gotPath, wantPath)
-	}
-	if string(gotData) != string(validKubeconfig()) {
-		t.Errorf("create callback received %q, want decrypted profile bytes", gotData)
-	}
-	if _, err := os.Stat(currentPathForTest(m)); !os.IsNotExist(err) {
-		t.Errorf("Unlock() must not write current state file: stat err = %v", err)
-	}
-}
-
-func TestManager_Unlock_InvalidName(t *testing.T) {
-	m := newTestManager(t)
-	called := false
-	_, err := m.Unlock("../bad", func([]byte) (string, error) {
-		called = true
-		return "", nil
-	})
-	if err == nil {
-		t.Fatal("Unlock() error = nil, want invalid name error")
-	}
-	if called {
-		t.Error("create callback was invoked despite invalid name")
-	}
-}
-
-func TestManager_Unlock_MissingProfile(t *testing.T) {
-	installFakeGPG(t)
-	m := newTestManager(t)
-
-	_, err := m.Unlock("missing", func([]byte) (string, error) {
-		return "", nil
-	})
-	if err == nil {
-		t.Fatal("Unlock() error = nil, want missing profile error")
-	}
-	if !strings.Contains(err.Error(), `profile "missing" not found`) {
-		t.Fatalf("Unlock() error = %v, want %q substring", err, `profile "missing" not found`)
-	}
-}
-
-func TestUnlockHoldsLockDuringCreateCallback(t *testing.T) {
-	installFakeGPG(t)
-	m := newTestManager(t)
-	writePlaintextProfile(t, m, "prod")
-
-	entered := make(chan struct{})
-	release := make(chan struct{})
-	createdPath := filepath.Join(t.TempDir(), "prod.yaml")
-	unlockDone := make(chan error, 1)
-	go func() {
-		path, err := m.Unlock("prod", func(data []byte) (string, error) {
-			close(entered)
-			<-release
-			return createdPath, nil
-		})
-		if err == nil && path == "" {
-			err = fmt.Errorf("Unlock() path is empty")
-		}
-		unlockDone <- err
-	}()
-
-	waitForEntry(t, entered, unlockDone, "Unlock callback")
-	lockDone := make(chan error, 1)
-	go func() {
-		lockDone <- m.WithLock(func() error { return nil })
-	}()
-
-	assertStillBlocked(t, lockDone, "WithLock while unlock callback is active")
-	close(release)
-	if err := waitForResult(t, unlockDone, "Unlock"); err != nil {
-		t.Fatalf("Unlock() error = %v", err)
-	}
-	if err := waitForResult(t, lockDone, "WithLock after unlock callback exits"); err != nil {
-		t.Fatalf("WithLock() error = %v", err)
-	}
-}
-
 func newTestManager(t *testing.T) *Manager {
 	t.Helper()
+	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
 	m, err := NewManager(&config.Config{DataDir: t.TempDir(), GPGRecipient: "test@example.com"})
 	if err != nil {
 		t.Fatalf("NewManager() error: %v", err)
@@ -567,9 +383,9 @@ func setCurrentForTest(t *testing.T, m *Manager, name string) {
 
 func profileExistsForTest(t *testing.T, m *Manager, name string) bool {
 	t.Helper()
-	exists, err := m.profileExists(name)
+	exists, err := m.Exists(name)
 	if err != nil {
-		t.Fatalf("profileExists(%q) error: %v", name, err)
+		t.Fatalf("Exists(%q) error: %v", name, err)
 	}
 	return exists
 }
@@ -830,155 +646,6 @@ func TestManager_WriteEncrypted_OverwritesExisting(t *testing.T) {
 	}
 }
 
-func TestActivateCacheHitSkipsCreate(t *testing.T) {
-	m := newTestManager(t)
-	writeProfile(t, m, "prod")
-
-	probeCalls := 0
-	createCalls := 0
-	probe := func(name string, cipherMtime time.Time) (string, bool, error) {
-		probeCalls++
-		if name != "prod" {
-			t.Fatalf("probe got name %q, want \"prod\"", name)
-		}
-		return "/cached/prod.yaml", true, nil
-	}
-	create := func(data []byte) (string, error) {
-		createCalls++
-		return "/created/prod.yaml", nil
-	}
-
-	path, err := m.Activate("prod", probe, create, nil)
-	if err != nil {
-		t.Fatalf("Activate() error: %v", err)
-	}
-	if path != "/cached/prod.yaml" {
-		t.Errorf("path = %q, want \"/cached/prod.yaml\"", path)
-	}
-	if probeCalls != 1 {
-		t.Errorf("probe called %d times, want 1", probeCalls)
-	}
-	if createCalls != 0 {
-		t.Errorf("create called %d times on hit, want 0", createCalls)
-	}
-	current, err := m.GetCurrent()
-	if err != nil {
-		t.Fatalf("GetCurrent() error: %v", err)
-	}
-	if current != "prod" {
-		t.Errorf("GetCurrent() = %q, want \"prod\"", current)
-	}
-}
-
-func TestActivateCacheMissCallsCreate(t *testing.T) {
-	installFakeGPG(t)
-	m := newTestManager(t)
-	writePlaintextProfile(t, m, "prod")
-
-	createCalls := 0
-	createPath := filepath.Join(t.TempDir(), "prod.yaml")
-	probe := func(name string, cipherMtime time.Time) (string, bool, error) {
-		return createPath, false, nil
-	}
-	create := func(data []byte) (string, error) {
-		createCalls++
-		return createPath, nil
-	}
-
-	path, err := m.Activate("prod", probe, create, nil)
-	if err != nil {
-		t.Fatalf("Activate() error: %v", err)
-	}
-	if path != createPath {
-		t.Errorf("path = %q, want %q", path, createPath)
-	}
-	if createCalls != 1 {
-		t.Errorf("create called %d times, want 1", createCalls)
-	}
-}
-
-func TestActivateMissCleanupOnCurrentUpdateFailure(t *testing.T) {
-	installFakeGPG(t)
-	m := newTestManager(t)
-	writePlaintextProfile(t, m, "prod")
-	setCurrentForTest(t, m, "prod")
-	replaceStateDirWithSymlink(t, m)
-
-	createdPath := filepath.Join(t.TempDir(), "prod.yaml")
-	cleanedPath := ""
-	probe := func(name string, cipherMtime time.Time) (string, bool, error) {
-		return createdPath, false, nil
-	}
-	create := func(data []byte) (string, error) {
-		return createdPath, nil
-	}
-	cleanup := func(path string) error {
-		cleanedPath = path
-		return nil
-	}
-
-	if _, err := m.Activate("prod", probe, create, cleanup); err == nil {
-		t.Fatal("Activate() error = nil, want current update error")
-	}
-	if cleanedPath != createdPath {
-		t.Fatalf("cleanup path = %q, want %q", cleanedPath, createdPath)
-	}
-}
-
-func TestActivateHitNoCleanupOnCurrentUpdateFailure(t *testing.T) {
-	m := newTestManager(t)
-	writeProfile(t, m, "prod")
-	setCurrentForTest(t, m, "prod")
-	replaceStateDirWithSymlink(t, m)
-
-	cachedPath := filepath.Join(t.TempDir(), "prod.yaml")
-	cleanupCalls := 0
-	probe := func(name string, cipherMtime time.Time) (string, bool, error) {
-		return cachedPath, true, nil
-	}
-	create := func(data []byte) (string, error) {
-		t.Fatal("create called on cache hit")
-		return "", nil
-	}
-	cleanup := func(path string) error {
-		cleanupCalls++
-		return nil
-	}
-
-	if _, err := m.Activate("prod", probe, create, cleanup); err == nil {
-		t.Fatal("Activate() error = nil, want current update error")
-	}
-	if cleanupCalls != 0 {
-		t.Errorf("cleanup called %d times on hit failure, want 0", cleanupCalls)
-	}
-}
-
-func TestActivateProbePassesCiphertextMtime(t *testing.T) {
-	m := newTestManager(t)
-	writeProfile(t, m, "prod")
-	want := time.Now().Add(-7 * time.Hour).Truncate(time.Second)
-	if err := os.Chtimes(profilePathForTest(m, "prod"), want, want); err != nil {
-		t.Fatalf("chtimes: %v", err)
-	}
-
-	var gotMtime time.Time
-	probe := func(name string, cipherMtime time.Time) (string, bool, error) {
-		gotMtime = cipherMtime
-		return "/cached/prod.yaml", true, nil
-	}
-	create := func(data []byte) (string, error) {
-		t.Fatal("create called on hit")
-		return "", nil
-	}
-
-	if _, err := m.Activate("prod", probe, create, nil); err != nil {
-		t.Fatalf("Activate() error: %v", err)
-	}
-	if !gotMtime.Equal(want) {
-		t.Errorf("probe got mtime %v, want %v", gotMtime, want)
-	}
-}
-
 func TestProfileMtimeReturnsCiphertextMtime(t *testing.T) {
 	m := newTestManager(t)
 	writeProfile(t, m, "prod")
@@ -1009,5 +676,213 @@ func TestManager_WriteEncrypted_InvalidName(t *testing.T) {
 	m := newTestManager(t)
 	if err := m.WriteEncrypted("../bad", []byte("x")); err == nil {
 		t.Fatal("WriteEncrypted() error = nil, want invalid name error")
+	}
+}
+
+func TestActivateAndUnlockHoldLockWhileDecrypting(t *testing.T) {
+	for _, tc := range []struct {
+		op  string
+		run func(*Manager) error
+	}{
+		{"Activate", func(m *Manager) error { _, err := m.Activate("prod"); return err }},
+		{"Unlock", func(m *Manager) error { _, err := m.Unlock("prod"); return err }},
+	} {
+		t.Run(tc.op, func(t *testing.T) {
+			entered, release := installBlockingGPG(t)
+			m := newTestManager(t)
+			writePlaintextProfile(t, m, "prod")
+
+			done := make(chan error, 1)
+			go func() { done <- tc.run(m) }()
+			waitForFile(t, entered, done, tc.op)
+
+			lockDone := make(chan error, 1)
+			go func() { lockDone <- m.WithLock(func() error { return nil }) }()
+			assertStillBlocked(t, lockDone, "WithLock while "+tc.op+" decrypts")
+
+			if err := os.WriteFile(release, nil, 0600); err != nil {
+				t.Fatalf("release fake gpg: %v", err)
+			}
+			if err := waitForResult(t, done, tc.op); err != nil {
+				t.Fatalf("%s() error = %v", tc.op, err)
+			}
+			if err := waitForResult(t, lockDone, "WithLock after "+tc.op); err != nil {
+				t.Fatalf("WithLock() error = %v", err)
+			}
+		})
+	}
+}
+
+func TestActivateReusesFreshActivationFile(t *testing.T) {
+	installFakeGPG(t)
+	m := newTestManager(t)
+	writePlaintextProfile(t, m, "prod")
+	cipherMtime := time.Now().Add(-time.Hour)
+	if err := os.Chtimes(profilePathForTest(m, "prod"), cipherMtime, cipherMtime); err != nil {
+		t.Fatalf("chtimes: %v", err)
+	}
+	want := writeRuntimeFileForTest(t, "prod", "cached", time.Now())
+
+	path, err := m.Activate("prod")
+	if err != nil {
+		t.Fatalf("Activate() error: %v", err)
+	}
+	if path != want {
+		t.Errorf("path = %q, want %q", path, want)
+	}
+	assertFileContent(t, path, "cached")
+	current, err := m.GetCurrent()
+	if err != nil {
+		t.Fatalf("GetCurrent() error: %v", err)
+	}
+	if current != "prod" {
+		t.Errorf("GetCurrent() = %q, want \"prod\"", current)
+	}
+}
+
+func TestActivateRewritesStaleActivationFile(t *testing.T) {
+	installFakeGPG(t)
+	m := newTestManager(t)
+	writePlaintextProfile(t, m, "prod")
+	want := writeRuntimeFileForTest(t, "prod", "stale", time.Now().Add(-time.Hour))
+
+	path, err := m.Activate("prod")
+	if err != nil {
+		t.Fatalf("Activate() error: %v", err)
+	}
+	if path != want {
+		t.Errorf("path = %q, want %q", path, want)
+	}
+	assertFileContent(t, path, string(validKubeconfig()))
+}
+
+func TestActivateRemovesCreatedFileOnCurrentUpdateFailure(t *testing.T) {
+	installFakeGPG(t)
+	m := newTestManager(t)
+	writePlaintextProfile(t, m, "prod")
+	setCurrentForTest(t, m, "prod")
+	replaceStateDirWithSymlink(t, m)
+
+	if _, err := m.Activate("prod"); err == nil {
+		t.Fatal("Activate() error = nil, want current update error")
+	}
+	if _, err := os.Stat(runtimeFileForTest("prod")); !os.IsNotExist(err) {
+		t.Fatalf("activation file left behind: stat err = %v", err)
+	}
+}
+
+func TestActivateKeepsReusedFileOnCurrentUpdateFailure(t *testing.T) {
+	m := newTestManager(t)
+	writeProfile(t, m, "prod")
+	setCurrentForTest(t, m, "prod")
+	replaceStateDirWithSymlink(t, m)
+	path := writeRuntimeFileForTest(t, "prod", "cached", time.Now().Add(time.Hour))
+
+	if _, err := m.Activate("prod"); err == nil {
+		t.Fatal("Activate() error = nil, want current update error")
+	}
+	assertFileContent(t, path, "cached")
+}
+
+func TestManager_Unlock(t *testing.T) {
+	installFakeGPG(t)
+	m := newTestManager(t)
+	writePlaintextProfile(t, m, "prod")
+
+	path, err := m.Unlock("prod")
+	if err != nil {
+		t.Fatalf("Unlock() error = %v", err)
+	}
+	if want := runtimeFileForTest("prod"); path != want {
+		t.Errorf("Unlock() path = %q, want %q", path, want)
+	}
+	assertFileContent(t, path, string(validKubeconfig()))
+	if _, err := os.Stat(currentPathForTest(m)); !os.IsNotExist(err) {
+		t.Errorf("Unlock() must not write current state file: stat err = %v", err)
+	}
+}
+
+func TestManager_Unlock_InvalidName(t *testing.T) {
+	m := newTestManager(t)
+	if _, err := m.Unlock("../bad"); err == nil {
+		t.Fatal("Unlock() error = nil, want invalid name error")
+	}
+}
+
+func TestManager_Unlock_MissingProfile(t *testing.T) {
+	installFakeGPG(t)
+	m := newTestManager(t)
+
+	_, err := m.Unlock("missing")
+	if err == nil {
+		t.Fatal("Unlock() error = nil, want missing profile error")
+	}
+	if !strings.Contains(err.Error(), `profile "missing" not found`) {
+		t.Fatalf("Unlock() error = %v, want %q substring", err, `profile "missing" not found`)
+	}
+}
+
+func runtimeFileForTest(name string) string {
+	return filepath.Join(storage.RuntimeDir(), name+".yaml")
+}
+
+func writeRuntimeFileForTest(t *testing.T, name, content string, mtime time.Time) string {
+	t.Helper()
+	path := runtimeFileForTest(name)
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		t.Fatalf("create runtime dir: %v", err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+		t.Fatalf("write activation file: %v", err)
+	}
+	if err := os.Chtimes(path, mtime, mtime); err != nil {
+		t.Fatalf("chtimes activation file: %v", err)
+	}
+	return path
+}
+
+func assertFileContent(t *testing.T, path, want string) {
+	t.Helper()
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	if string(got) != want {
+		t.Errorf("%s content = %q, want %q", path, got, want)
+	}
+}
+
+// installBlockingGPG installs a fake gpg that creates entered, waits for
+// release to exist, then echoes stdin.
+func installBlockingGPG(t *testing.T) (entered, release string) {
+	t.Helper()
+	dir := t.TempDir()
+	entered = filepath.Join(dir, "entered")
+	release = filepath.Join(dir, "release")
+	script := fmt.Sprintf("#!/bin/sh\ntouch %q\nwhile [ ! -e %q ]; do sleep 0.01; done\ncat\n", entered, release)
+	for _, name := range []string{"gpg2", "gpg"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(script), 0700); err != nil {
+			t.Fatalf("write fake %s: %v", name, err)
+		}
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	return entered, release
+}
+
+func waitForFile(t *testing.T, path string, done <-chan error, op string) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if _, err := os.Stat(path); err == nil {
+			return
+		}
+		select {
+		case err := <-done:
+			t.Fatalf("%s exited before entry: %v", op, err)
+		case <-time.After(10 * time.Millisecond):
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for %s", op)
+		}
 	}
 }

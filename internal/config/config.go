@@ -124,12 +124,6 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("gpg_recipients must not contain blank recipients")
 		}
 	}
-	if _, err := shell.NormalizeStyle(c.ShellStyle); err != nil {
-		return err
-	}
-	if _, err := normalizeDataDir(c.DataDir); err != nil {
-		return err
-	}
 	if len(c.Recipients()) == 0 {
 		return fmt.Errorf("no GPG recipient configured; run: kubegonfig init")
 	}

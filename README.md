@@ -52,20 +52,13 @@ kubegonfig exec staging -- kubectl get pods
 
 ## Shell integration
 
-Source the appropriate wrapper in your shell rc file. This lets the `use` subcommand export `KUBECONFIG` into your current shell session without wrapping them in `eval` manually. The bash/zsh wrappers request POSIX shell output by default (passing `--shell posix`); the fish wrapper requests fish output (passing `--shell fish`). The wrappers also recognize global `--quiet` / `-q` before `use`.
+Source the appropriate wrapper in your shell rc file. This lets the `use` subcommand export `KUBECONFIG` into your current shell session without wrapping them in `eval` manually. The bash/zsh wrapper requests POSIX shell output by default (passing `--shell posix`); the fish wrapper requests fish output (passing `--shell fish`). The wrappers also recognize global `--quiet` / `-q` before `use`.
 
-### Bash
+### Bash / Zsh
 
 ```bash
-# ~/.bashrc
-source /path/to/kubegonfig/shell/kubegonfig.bash
-```
-
-### Zsh
-
-```zsh
-# ~/.zshrc
-source /path/to/kubegonfig/shell/kubegonfig.zsh
+# ~/.bashrc or ~/.zshrc
+source /path/to/kubegonfig/shell/kubegonfig.sh
 ```
 
 ### Fish
@@ -192,8 +185,8 @@ go test -race ./... -count=1
 go vet ./...
 go build -trimpath -o ./kubegonfig .
 golangci-lint run
-bash -n shell/kubegonfig.bash
-zsh -n shell/kubegonfig.zsh
+bash -n shell/kubegonfig.sh
+zsh -n shell/kubegonfig.sh
 fish -n shell/kubegonfig.fish
 ```
 

@@ -66,13 +66,12 @@ func OpenUnlinked(name string, data []byte) (*os.File, error) {
 	return tmp, nil
 }
 
-// Remove deletes a specific temp file.
-func Remove(path string) error {
-	dir, name, err := runtimeTempPathParts(path)
-	if err != nil {
+// Remove deletes the activation file for the named profile.
+func Remove(name string) error {
+	if err := shell.ValidateName(name); err != nil {
 		return err
 	}
-	return storage.RemoveFileInDir(dir, name)
+	return storage.RemoveFileInDir(storage.RuntimeDir(), name+".yaml")
 }
 
 // CleanupStale removes stale kubegonfig kubeconfig temp files from the runtime directory.
@@ -102,21 +101,4 @@ func CleanupStale() (int, error) {
 func isKubeconfigTempName(name string) bool {
 	profileName, ok := strings.CutSuffix(name, ".yaml")
 	return ok && shell.ValidateName(profileName) == nil
-}
-
-func runtimeTempPathParts(path string) (string, string, error) {
-	dir := storage.RuntimeDir()
-	absDir, err := filepath.Abs(dir)
-	if err != nil {
-		return "", "", fmt.Errorf("resolve runtime dir path: %w", err)
-	}
-	absPath, err := filepath.Abs(path)
-	if err != nil {
-		return "", "", fmt.Errorf("resolve temp file path: %w", err)
-	}
-	name := filepath.Base(absPath)
-	if filepath.Dir(absPath) != absDir || !isKubeconfigTempName(name) {
-		return "", "", fmt.Errorf("refusing to remove non-kubegonfig runtime temp file %q", path)
-	}
-	return dir, name, nil
 }

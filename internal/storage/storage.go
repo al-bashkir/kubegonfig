@@ -77,29 +77,6 @@ func openEnsuredDir(path string, perm os.FileMode) (*os.File, error) {
 	return dir, nil
 }
 
-func openDirNoFollow(path string) (*os.File, error) {
-	fd, err := unix.Open(path, unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
-	if err != nil {
-		return nil, fmt.Errorf("open directory %s: %w", path, err)
-	}
-	return os.NewFile(uintptr(fd), path), nil
-}
-
-func validateOpenDir(path string, dir *os.File) error {
-	info, err := dir.Stat()
-	if err != nil {
-		return fmt.Errorf("stat %s: %w", path, err)
-	}
-	if !info.IsDir() {
-		return fmt.Errorf("%s is not a directory", path)
-	}
-	stat, ok := info.Sys().(*unix.Stat_t)
-	if ok && stat.Uid != uint32(os.Getuid()) {
-		return fmt.Errorf("directory %s is not owned by current user", path)
-	}
-	return nil
-}
-
 // RemoveFileInDir removes a file relative to a verified non-symlink directory.
 func RemoveFileInDir(dirPath, name string) error {
 	if err := validateRelativeFileName(name); err != nil {
@@ -314,14 +291,22 @@ func RegularFileMtimeInDir(dirPath, name string) (time.Time, bool, error) {
 	return time.Unix(int64(stat.Mtim.Sec), int64(stat.Mtim.Nsec)), true, nil
 }
 
+// openVerifiedDir opens path as a non-symlink directory owned by the current
+// user. O_DIRECTORY makes a FIFO or other non-directory fail without blocking.
 func openVerifiedDir(path string) (*os.File, error) {
-	dir, err := openDirNoFollow(path)
+	fd, err := unix.Open(path, unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("open directory %s: %w", path, err)
 	}
-	if err := validateOpenDir(path, dir); err != nil {
+	dir := os.NewFile(uintptr(fd), path)
+	var stat unix.Stat_t
+	if err := unix.Fstat(fd, &stat); err != nil {
 		_ = dir.Close()
-		return nil, err
+		return nil, fmt.Errorf("stat %s: %w", path, err)
+	}
+	if stat.Uid != uint32(os.Getuid()) {
+		_ = dir.Close()
+		return nil, fmt.Errorf("directory %s is not owned by current user", path)
 	}
 	return dir, nil
 }

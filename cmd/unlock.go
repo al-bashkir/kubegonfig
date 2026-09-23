@@ -8,7 +8,6 @@ import (
 	"fmt"
 
 	"kubegonfig/internal/shell"
-	"kubegonfig/internal/tmpfile"
 
 	"github.com/spf13/cobra"
 )
@@ -54,9 +53,7 @@ func runUnlock(args []string) error {
 		}
 		seen[name] = struct{}{}
 
-		path, err := mgr.Unlock(name, func(data []byte) (string, error) {
-			return tmpfile.Create(name, data)
-		})
+		path, err := mgr.Unlock(name)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("unlock %q: %w", name, err))
 			continue

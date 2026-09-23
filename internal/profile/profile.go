@@ -20,6 +20,7 @@ import (
 	"kubegonfig/internal/kubeconfig"
 	"kubegonfig/internal/shell"
 	"kubegonfig/internal/storage"
+	"kubegonfig/internal/tmpfile"
 )
 
 const (
@@ -61,18 +62,6 @@ func (m *Manager) lockPath() string {
 	return filepath.Join(m.dataDir, lockFile)
 }
 
-func (m *Manager) writeProfile(name string, data []byte) error {
-	return storage.AtomicWriteInDir(m.profilesPath(), profileFileName(name), data, 0600)
-}
-
-func (m *Manager) readProfile(name string) ([]byte, error) {
-	data, err := storage.ReadFileInDir(m.profilesPath(), profileFileName(name))
-	if errors.Is(err, os.ErrNotExist) {
-		return nil, fmt.Errorf("profile %q not found", name)
-	}
-	return data, err
-}
-
 func (m *Manager) profileMtime(name string) (time.Time, error) {
 	mtime, ok, err := storage.RegularFileMtimeInDir(m.profilesPath(), profileFileName(name))
 	if err != nil {
@@ -106,7 +95,7 @@ func (m *Manager) Create(name string, data []byte) error {
 	}
 
 	return m.WithLock(func() error {
-		exists, err := m.profileExists(name)
+		exists, err := m.Exists(name)
 		if err != nil {
 			return err
 		}
@@ -119,7 +108,7 @@ func (m *Manager) Create(name string, data []byte) error {
 			return fmt.Errorf("encrypt profile: %w", err)
 		}
 
-		return m.writeProfile(name, encrypted)
+		return m.WriteEncrypted(name, encrypted)
 	})
 }
 
@@ -153,10 +142,15 @@ func (m *Manager) List() ([]string, error) {
 
 // Decrypt reads and decrypts a profile, returning the plaintext kubeconfig.
 func (m *Manager) Decrypt(name string) ([]byte, error) {
-	if err := shell.ValidateName(name); err != nil {
+	encrypted, err := m.ReadEncrypted(name)
+	if err != nil {
 		return nil, err
 	}
-	return m.decryptProfile(name)
+	data, err := crypto.Decrypt(encrypted)
+	if err != nil {
+		return nil, fmt.Errorf("decrypt profile %q: %w", name, err)
+	}
+	return data, nil
 }
 
 // ReadEncrypted returns the raw encrypted blob for a profile without invoking
@@ -165,7 +159,11 @@ func (m *Manager) ReadEncrypted(name string) ([]byte, error) {
 	if err := shell.ValidateName(name); err != nil {
 		return nil, err
 	}
-	return m.readProfile(name)
+	data, err := storage.ReadFileInDir(m.profilesPath(), profileFileName(name))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, fmt.Errorf("profile %q not found", name)
+	}
+	return data, err
 }
 
 // WriteEncrypted atomically writes a raw encrypted blob for the named profile.
@@ -175,20 +173,7 @@ func (m *Manager) WriteEncrypted(name string, blob []byte) error {
 	if err := shell.ValidateName(name); err != nil {
 		return err
 	}
-	return m.writeProfile(name, blob)
-}
-
-func (m *Manager) decryptProfile(name string) ([]byte, error) {
-	encrypted, err := m.readProfile(name)
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := crypto.Decrypt(encrypted)
-	if err != nil {
-		return nil, fmt.Errorf("decrypt profile %q: %w", name, err)
-	}
-	return data, nil
+	return storage.AtomicWriteInDir(m.profilesPath(), profileFileName(name), blob, 0600)
 }
 
 // Edit decrypts a profile, passes it to edit while holding the profile lock,
@@ -199,7 +184,7 @@ func (m *Manager) Edit(name string, edit func([]byte) ([]byte, error)) (changed 
 	}
 
 	err = m.WithLock(func() error {
-		original, err := m.decryptProfile(name)
+		original, err := m.Decrypt(name)
 		if err != nil {
 			return err
 		}
@@ -223,7 +208,7 @@ func (m *Manager) Edit(name string, edit func([]byte) ([]byte, error)) (changed 
 		if err != nil {
 			return fmt.Errorf("encrypt profile: %w", err)
 		}
-		if err := m.writeProfile(name, encrypted); err != nil {
+		if err := m.WriteEncrypted(name, encrypted); err != nil {
 			return err
 		}
 		changed = true
@@ -232,29 +217,9 @@ func (m *Manager) Edit(name string, edit func([]byte) ([]byte, error)) (changed 
 	return changed, err
 }
 
-// Activate locks the manager, asks probe whether the existing activation file
-// is fresh enough to reuse, decrypts the profile only on a cache miss, calls
-// create when a fresh activation file must be materialized, and records the
-// profile as current.
-//
-// probe receives the modification time of the encrypted profile and reports
-// whether a usable plaintext already exists for name. On a cache miss it
-// returns the path where create should write; on a hit it returns the path of
-// the existing file.
-//
-// create is invoked only on a cache miss and receives the decrypted
-// kubeconfig bytes.
-//
-// cleanup is invoked when setCurrent fails after a cache miss to remove the
-// just-created activation file. It is NOT invoked on a cache-hit failure: the
-// pre-existing file may still be in use by another shell that earlier
-// evaluated `kubegonfig use`.
-func (m *Manager) Activate(
-	name string,
-	probe func(name string, cipherMtime time.Time) (string, bool, error),
-	create func(data []byte) (string, error),
-	cleanup func(string) error,
-) (path string, err error) {
+// Activate writes the profile's runtime activation file, reusing it when it
+// is newer than the ciphertext, and records the profile as current.
+func (m *Manager) Activate(name string) (path string, err error) {
 	if err := shell.ValidateName(name); err != nil {
 		return "", err
 	}
@@ -265,28 +230,26 @@ func (m *Manager) Activate(
 			return err
 		}
 
-		cachedPath, hit, err := probe(name, cipherMtime)
+		var hit bool
+		path, hit, err = tmpfile.ProbeCached(name, cipherMtime)
 		if err != nil {
 			return err
 		}
-
-		if hit {
-			path = cachedPath
-		} else {
-			data, err := m.decryptProfile(name)
+		if !hit {
+			data, err := m.Decrypt(name)
 			if err != nil {
 				return err
 			}
-			created, err := create(data)
-			if err != nil {
+			if path, err = tmpfile.Create(name, data); err != nil {
 				return err
 			}
-			path = created
 		}
 
 		if err := m.setCurrent(name); err != nil {
-			if !hit && cleanup != nil {
-				if cleanupErr := cleanup(path); cleanupErr != nil {
+			// A reused file may be in use by another shell; only remove one
+			// created here.
+			if !hit {
+				if cleanupErr := tmpfile.Remove(name); cleanupErr != nil {
 					return errors.Join(err, fmt.Errorf("cleanup activation file: %w", cleanupErr))
 				}
 			}
@@ -297,20 +260,19 @@ func (m *Manager) Activate(
 	return path, err
 }
 
-// Unlock decrypts a profile and writes its activation file via create,
-// while holding the profile lock. Unlike Activate, it does not record
-// the profile as current.
-func (m *Manager) Unlock(name string, create func([]byte) (string, error)) (path string, err error) {
+// Unlock decrypts a profile to its runtime activation file while holding the
+// profile lock. Unlike Activate, it does not record the profile as current.
+func (m *Manager) Unlock(name string) (path string, err error) {
 	if err := shell.ValidateName(name); err != nil {
 		return "", err
 	}
 
 	err = m.WithLock(func() error {
-		data, err := m.decryptProfile(name)
+		data, err := m.Decrypt(name)
 		if err != nil {
 			return err
 		}
-		path, err = create(data)
+		path, err = tmpfile.Create(name, data)
 		return err
 	})
 	return path, err
@@ -323,7 +285,7 @@ func (m *Manager) Delete(name string) error {
 	}
 
 	return m.WithLock(func() error {
-		exists, err := m.profileExists(name)
+		exists, err := m.Exists(name)
 		if err != nil {
 			return err
 		}
@@ -360,14 +322,14 @@ func (m *Manager) Rename(oldName, newName string) error {
 	}
 
 	return m.WithLock(func() error {
-		exists, err := m.profileExists(oldName)
+		exists, err := m.Exists(oldName)
 		if err != nil {
 			return err
 		}
 		if !exists {
 			return fmt.Errorf("profile %q not found", oldName)
 		}
-		exists, err = m.profileExists(newName)
+		exists, err = m.Exists(newName)
 		if err != nil {
 			return err
 		}
@@ -393,17 +355,13 @@ func (m *Manager) Rename(oldName, newName string) error {
 	})
 }
 
-func (m *Manager) profileExists(name string) (bool, error) {
-	_, ok, err := storage.RegularFileMtimeInDir(m.profilesPath(), profileFileName(name))
-	return ok, err
-}
-
 // Exists reports whether a profile with the given name is stored locally.
 func (m *Manager) Exists(name string) (bool, error) {
 	if err := shell.ValidateName(name); err != nil {
 		return false, err
 	}
-	return m.profileExists(name)
+	_, ok, err := storage.RegularFileMtimeInDir(m.profilesPath(), profileFileName(name))
+	return ok, err
 }
 
 // GetCurrent returns the name of the currently active profile.

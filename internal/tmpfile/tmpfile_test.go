@@ -46,7 +46,7 @@ func TestCreateAndCleanup(t *testing.T) {
 		t.Errorf("filename = %q, want %q", filepath.Base(path), expectedName)
 	}
 
-	if err := Remove(path); err != nil {
+	if err := Remove("test-profile"); err != nil {
 		t.Fatalf("Remove() error: %v", err)
 	}
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
@@ -133,7 +133,7 @@ func TestRemove(t *testing.T) {
 		t.Fatalf("Create() error: %v", err)
 	}
 
-	if err := Remove(path); err != nil {
+	if err := Remove("remove-me"); err != nil {
 		t.Fatalf("Remove() error: %v", err)
 	}
 
@@ -142,35 +142,10 @@ func TestRemove(t *testing.T) {
 	}
 }
 
-func TestRemoveRejectsPathOutsideRuntimeDir(t *testing.T) {
-	tmp := t.TempDir()
-	t.Setenv("XDG_RUNTIME_DIR", tmp)
-	outside := filepath.Join(t.TempDir(), "remove-me.yaml")
-	if err := os.WriteFile(outside, []byte("data"), 0600); err != nil {
-		t.Fatalf("setup: %v", err)
-	}
-
-	if err := Remove(outside); err == nil {
-		t.Fatal("Remove() error = nil, want outside-runtime rejection")
-	}
-	if _, err := os.Stat(outside); err != nil {
-		t.Fatalf("outside file changed: %v", err)
-	}
-}
-
-func TestRemove_DeletesFile(t *testing.T) {
-	tmp := t.TempDir()
-	t.Setenv("XDG_RUNTIME_DIR", tmp)
-
-	path, err := Create("remove-me", []byte("data"))
-	if err != nil {
-		t.Fatalf("Create() error: %v", err)
-	}
-	if err := Remove(path); err != nil {
-		t.Fatalf("Remove() error: %v", err)
-	}
-	if _, err := os.Stat(path); !os.IsNotExist(err) {
-		t.Errorf("file should not exist after Remove: %v", err)
+func TestRemove_InvalidName(t *testing.T) {
+	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
+	if err := Remove("../bad"); err == nil {
+		t.Fatal("Remove() error = nil, want invalid name error")
 	}
 }
 

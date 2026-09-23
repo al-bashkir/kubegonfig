@@ -31,8 +31,8 @@ jobs:
 
       - name: Check shell wrapper syntax
         run: |
-          bash -n shell/kubegonfig.bash
-          zsh -n shell/kubegonfig.zsh
+          bash -n shell/kubegonfig.sh
+          zsh -n shell/kubegonfig.sh
           fish -n shell/kubegonfig.fish
 
   build:

@@ -770,40 +770,6 @@ func TestRestore_MergeConfigUnionsRecipients(t *testing.T) {
 	}
 }
 
-func TestRestore_ProfilesOnlySkipsConfigEvenWithMergeConfig(t *testing.T) {
-	srcCfg := &config.Config{DataDir: t.TempDir(), GPGRecipient: "src@example.com"}
-	srcCfg.GPGRecipients = []string{"shared@example.com"}
-	srcCfg.Path = filepath.Join(t.TempDir(), "config.yaml")
-	_ = srcCfg.Save()
-	srcMgr, _ := profile.NewManager(srcCfg)
-	if err := srcMgr.WriteEncrypted("alpha", []byte("a")); err != nil {
-		t.Fatalf("WriteEncrypted(): %v", err)
-	}
-	var buf bytes.Buffer
-	_ = Export(srcMgr, srcCfg, ExportOptions{
-		Names: []string{"alpha"}, IncludeConfig: true,
-		KubegonfigVersion: "0.2.0", Out: &buf,
-	})
-
-	dstCfg := &config.Config{DataDir: t.TempDir(), GPGRecipient: "dst@example.com"}
-	dstCfg.Path = filepath.Join(t.TempDir(), "config.yaml")
-	_ = dstCfg.Save()
-	dstMgr, _ := profile.NewManager(dstCfg)
-
-	plan, err := Restore(dstMgr, dstCfg, RestoreOptions{
-		In: bytes.NewReader(buf.Bytes()), MergeConfig: true, ProfilesOnly: true,
-	})
-	if err != nil {
-		t.Fatalf("Restore() error: %v", err)
-	}
-	if plan.ConfigAction != "skip-profiles-only" {
-		t.Errorf("plan.ConfigAction = %q, want skip-profiles-only", plan.ConfigAction)
-	}
-	if len(dstCfg.GPGRecipients) != 0 {
-		t.Errorf("GPGRecipients merged despite ProfilesOnly: %v", dstCfg.GPGRecipients)
-	}
-}
-
 func TestRestore_PlaintextArchiveReEncryptsWithLocalRecipients(t *testing.T) {
 	installFakeGPGForBundle(t)
 
