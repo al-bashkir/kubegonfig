@@ -34,5 +34,5 @@ func activateProfile(name, shellFlag string) (string, error) {
 		return "", err
 	}
 
-	return shell.FormatSet(style, "KUBECONFIG", path)
+	return shell.FormatSet(style, "KUBECONFIG", path), nil
 }

@@ -395,7 +395,7 @@ func TestExport_IncludeConfig(t *testing.T) {
 		t.Fatalf("write config.yaml: %v", err)
 	}
 	cfg := &config.Config{DataDir: dataDir, GPGRecipient: "test@example.com"}
-	cfg.SetPathForTest(filepath.Join(configDir, "config.yaml"))
+	cfg.Path = filepath.Join(configDir, "config.yaml")
 
 	mgr, err := profile.NewManager(cfg)
 	if err != nil {
@@ -729,7 +729,7 @@ func TestExport_LockSerializesWithDelete(t *testing.T) {
 func TestRestore_MergeConfigUnionsRecipients(t *testing.T) {
 	srcCfg := &config.Config{DataDir: t.TempDir(), GPGRecipient: "src@example.com"}
 	srcCfg.GPGRecipients = []string{"shared@example.com"}
-	srcCfg.SetPathForTest(filepath.Join(t.TempDir(), "config.yaml"))
+	srcCfg.Path = filepath.Join(t.TempDir(), "config.yaml")
 	if err := srcCfg.Save(); err != nil {
 		t.Fatalf("save src config: %v", err)
 	}
@@ -747,7 +747,7 @@ func TestRestore_MergeConfigUnionsRecipients(t *testing.T) {
 
 	dstCfg := &config.Config{DataDir: t.TempDir(), GPGRecipient: "dst@example.com"}
 	dstCfg.GPGRecipients = []string{"local-only@example.com"}
-	dstCfg.SetPathForTest(filepath.Join(t.TempDir(), "config.yaml"))
+	dstCfg.Path = filepath.Join(t.TempDir(), "config.yaml")
 	if err := dstCfg.Save(); err != nil {
 		t.Fatalf("save dst config: %v", err)
 	}
@@ -773,7 +773,7 @@ func TestRestore_MergeConfigUnionsRecipients(t *testing.T) {
 func TestRestore_ProfilesOnlySkipsConfigEvenWithMergeConfig(t *testing.T) {
 	srcCfg := &config.Config{DataDir: t.TempDir(), GPGRecipient: "src@example.com"}
 	srcCfg.GPGRecipients = []string{"shared@example.com"}
-	srcCfg.SetPathForTest(filepath.Join(t.TempDir(), "config.yaml"))
+	srcCfg.Path = filepath.Join(t.TempDir(), "config.yaml")
 	_ = srcCfg.Save()
 	srcMgr, _ := profile.NewManager(srcCfg)
 	if err := srcMgr.WriteEncrypted("alpha", []byte("a")); err != nil {
@@ -786,7 +786,7 @@ func TestRestore_ProfilesOnlySkipsConfigEvenWithMergeConfig(t *testing.T) {
 	})
 
 	dstCfg := &config.Config{DataDir: t.TempDir(), GPGRecipient: "dst@example.com"}
-	dstCfg.SetPathForTest(filepath.Join(t.TempDir(), "config.yaml"))
+	dstCfg.Path = filepath.Join(t.TempDir(), "config.yaml")
 	_ = dstCfg.Save()
 	dstMgr, _ := profile.NewManager(dstCfg)
 

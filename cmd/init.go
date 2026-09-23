@@ -26,7 +26,7 @@ var initCmd = &cobra.Command{
 When run without --recipient, lists available GPG secret keys
 and lets you select one interactively.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if err := crypto.CheckGPG(); err != nil {
+		if _, err := crypto.LookupGPG(); err != nil {
 			return err
 		}
 
@@ -52,7 +52,7 @@ and lets you select one interactively.`,
 			return fmt.Errorf("save config: %w", err)
 		}
 
-		info("Configuration saved to %s", c.Path())
+		info("Configuration saved to %s", c.Path)
 		return nil
 	},
 }

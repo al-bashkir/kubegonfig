@@ -124,11 +124,11 @@ func TestLookupGPGResolvesFromPath(t *testing.T) {
 	}
 	t.Setenv("PATH", dir)
 
-	got, err := lookupGPG()
+	got, err := LookupGPG()
 	if err != nil {
-		t.Fatalf("lookupGPG() error = %v", err)
+		t.Fatalf("LookupGPG() error = %v", err)
 	}
 	if got != path {
-		t.Fatalf("lookupGPG() = %q, want %q", got, path)
+		t.Fatalf("LookupGPG() = %q, want %q", got, path)
 	}
 }

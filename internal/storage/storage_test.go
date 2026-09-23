@@ -142,7 +142,7 @@ func TestAtomicWrite(t *testing.T) {
 	path := filepath.Join(tmp, "test.txt")
 	content := []byte("hello atomic")
 
-	if err := AtomicWrite(path, content, 0600); err != nil {
+	if err := AtomicWriteInDir(filepath.Dir(path), filepath.Base(path), content, 0600); err != nil {
 		t.Fatalf("AtomicWrite() error: %v", err)
 	}
 
@@ -167,11 +167,11 @@ func TestAtomicWrite_Overwrite(t *testing.T) {
 	tmp := t.TempDir()
 	path := filepath.Join(tmp, "test.txt")
 
-	if err := AtomicWrite(path, []byte("first"), 0600); err != nil {
+	if err := AtomicWriteInDir(filepath.Dir(path), filepath.Base(path), []byte("first"), 0600); err != nil {
 		t.Fatalf("AtomicWrite(first) error: %v", err)
 	}
 
-	if err := AtomicWrite(path, []byte("second"), 0600); err != nil {
+	if err := AtomicWriteInDir(filepath.Dir(path), filepath.Base(path), []byte("second"), 0600); err != nil {
 		t.Fatalf("AtomicWrite(second) error: %v", err)
 	}
 
@@ -188,7 +188,7 @@ func TestAtomicWrite_NestedDir(t *testing.T) {
 	tmp := t.TempDir()
 	path := filepath.Join(tmp, "a", "b", "test.txt")
 
-	if err := AtomicWrite(path, []byte("nested"), 0600); err != nil {
+	if err := AtomicWriteInDir(filepath.Dir(path), filepath.Base(path), []byte("nested"), 0600); err != nil {
 		t.Fatalf("AtomicWrite(nested) error: %v", err)
 	}
 

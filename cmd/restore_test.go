@@ -16,7 +16,7 @@ import (
 
 func TestRestoreCmd_RequiresArchiveArg(t *testing.T) {
 	c := &config.Config{DataDir: t.TempDir(), GPGRecipient: "x@example.com"}
-	c.SetPathForTest(filepath.Join(t.TempDir(), "config.yaml"))
+	c.Path = filepath.Join(t.TempDir(), "config.yaml")
 	_ = c.Save()
 	mgrLocal, err := profile.NewManager(c)
 	if err != nil {
@@ -31,7 +31,7 @@ func TestRestoreCmd_RequiresArchiveArg(t *testing.T) {
 
 func TestRestoreCmd_ForceAndSkipMutuallyExclusive(t *testing.T) {
 	c := &config.Config{DataDir: t.TempDir(), GPGRecipient: "x@example.com"}
-	c.SetPathForTest(filepath.Join(t.TempDir(), "config.yaml"))
+	c.Path = filepath.Join(t.TempDir(), "config.yaml")
 	_ = c.Save()
 	mgrLocal, _ := profile.NewManager(c)
 	saveAndRestoreState(t, c, mgrLocal)
@@ -48,7 +48,7 @@ func TestRestoreCmd_ForceAndSkipMutuallyExclusive(t *testing.T) {
 func TestRestoreCmd_RoundTripFromFile(t *testing.T) {
 	srcDataDir := t.TempDir()
 	srcCfg := &config.Config{DataDir: srcDataDir, GPGRecipient: "x@example.com"}
-	srcCfg.SetPathForTest(filepath.Join(t.TempDir(), "config.yaml"))
+	srcCfg.Path = filepath.Join(t.TempDir(), "config.yaml")
 	_ = srcCfg.Save()
 	srcMgr, _ := profile.NewManager(srcCfg)
 	if err := srcMgr.WriteEncrypted("alpha", []byte("alpha-cipher")); err != nil {
@@ -67,7 +67,7 @@ func TestRestoreCmd_RoundTripFromFile(t *testing.T) {
 
 	dstDataDir := t.TempDir()
 	dstCfg := &config.Config{DataDir: dstDataDir, GPGRecipient: "x@example.com"}
-	dstCfg.SetPathForTest(filepath.Join(t.TempDir(), "config.yaml"))
+	dstCfg.Path = filepath.Join(t.TempDir(), "config.yaml")
 	_ = dstCfg.Save()
 	dstMgr, _ := profile.NewManager(dstCfg)
 	saveAndRestoreState(t, dstCfg, dstMgr)

@@ -39,10 +39,9 @@ func EscapePosix(s string) string {
 
 // NormalizeStyle validates a shell output style and applies the default.
 func NormalizeStyle(style string) (string, error) {
-	if style == "" {
-		return StylePosix, nil
-	}
 	switch style {
+	case "":
+		return StylePosix, nil
 	case StylePosix, StyleFish:
 		return style, nil
 	default:
@@ -50,16 +49,11 @@ func NormalizeStyle(style string) (string, error) {
 	}
 }
 
-// FormatSet returns a shell command that exports key=value for the given style.
-func FormatSet(style, key, value string) (string, error) {
-	style, err := NormalizeStyle(style)
-	if err != nil {
-		return "", err
+// FormatSet returns a shell command that exports key=value. style must come
+// from NormalizeStyle.
+func FormatSet(style, key, value string) string {
+	if style == StyleFish {
+		return fmt.Sprintf("set -gx %s %s", key, EscapePosix(value))
 	}
-	switch style {
-	case StyleFish:
-		return fmt.Sprintf("set -gx %s %s", key, EscapePosix(value)), nil
-	default:
-		return fmt.Sprintf("export %s=%s", key, EscapePosix(value)), nil
-	}
+	return fmt.Sprintf("export %s=%s", key, EscapePosix(value))
 }

@@ -55,7 +55,7 @@ Or add a helper function to your shell rc file:
 		case "list", "current", "cleanup":
 			// These don't need GPG check.
 		default:
-			if err := crypto.CheckGPG(); err != nil {
+			if _, err := crypto.LookupGPG(); err != nil {
 				return err
 			}
 		}

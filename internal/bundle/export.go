@@ -151,7 +151,7 @@ func writeTarEntry(tw *tar.Writer, name string, body []byte, mtime time.Time) er
 }
 
 func readConfigBody(cfg *config.Config) ([]byte, error) {
-	path := cfg.Path()
+	path := cfg.Path
 	if path == "" {
 		return nil, fmt.Errorf("config path is not set; load config before export")
 	}

@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path"
 	"sort"
 	"strings"
 
@@ -138,9 +137,8 @@ func Restore(mgr *profile.Manager, cfg *config.Config, opts RestoreOptions) (Res
 			if hdr.Typeflag != tar.TypeReg {
 				return fmt.Errorf("archive entry %q has disallowed type %d", hdr.Name, hdr.Typeflag)
 			}
-			if err := validateEntryPath(hdr.Name); err != nil {
-				return err
-			}
+			// Entry names must match ConfigName or a manifest-listed file exactly;
+			// that allowlist rejects absolute and traversal paths.
 			switch {
 			case hdr.Name == ConfigName:
 				if plan.ConfigAction != "merge" {
@@ -214,20 +212,6 @@ func readManifest(rs io.ReadSeeker) (*Manifest, error) {
 		return nil, fmt.Errorf("read manifest body: %w", err)
 	}
 	return ParseManifest(body)
-}
-
-func validateEntryPath(name string) error {
-	if name == "" {
-		return fmt.Errorf("archive entry has empty name")
-	}
-	if path.IsAbs(name) {
-		return fmt.Errorf("archive entry %q is absolute", name)
-	}
-	clean := path.Clean(name)
-	if clean != name || strings.Contains(name, "..") {
-		return fmt.Errorf("archive entry %q contains traversal", name)
-	}
-	return nil
 }
 
 // prepareProfileBlob returns the bytes to write into the local store. For

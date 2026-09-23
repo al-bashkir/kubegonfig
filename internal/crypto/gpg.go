@@ -17,15 +17,9 @@ const (
 	maxGPGErrorLen     = 800
 )
 
-// CheckGPG verifies that a usable gpg binary exists in PATH.
-func CheckGPG() error {
-	_, err := lookupGPG()
-	return err
-}
-
-// lookupGPG resolves the gpg binary in PATH. exec.LookPath is cheap and runs a
+// LookupGPG resolves the gpg binary in PATH. exec.LookPath is cheap and runs a
 // handful of times per short-lived CLI invocation, so the result is not cached.
-func lookupGPG() (string, error) {
+func LookupGPG() (string, error) {
 	for _, name := range []string{"gpg2", "gpg"} {
 		path, err := exec.LookPath(name)
 		if err == nil {
@@ -74,7 +68,7 @@ func Decrypt(data []byte) ([]byte, error) {
 // runGPG runs gpg with stdin and returns stdout. Stderr is sanitized before it
 // reaches the error so secret data never leaks into user-facing output.
 func runGPG(op string, stdin []byte, args ...string) ([]byte, error) {
-	bin, err := lookupGPG()
+	bin, err := LookupGPG()
 	if err != nil {
 		return nil, err
 	}
@@ -99,7 +93,7 @@ type GPGKey struct {
 
 // ListSecretKeys returns all secret keys available in the GPG keyring.
 func ListSecretKeys() ([]GPGKey, error) {
-	out, err := runGPG("list-secret-keys", nil, "--list-secret-keys", "--with-colons", "--keyid-format", "long")
+	out, err := runGPG("list-secret-keys", nil, "--list-secret-keys", "--with-colons")
 	if err != nil {
 		return nil, err
 	}
