@@ -6,7 +6,7 @@ package cmd
 import (
 	"bufio"
 	"fmt"
-	"os"
+	"io"
 	"strconv"
 	"strings"
 
@@ -40,7 +40,7 @@ and lets you select one interactively.`,
 			if recipient = strings.TrimSpace(initRecipient); recipient == "" {
 				return fmt.Errorf("GPG recipient must not be blank")
 			}
-		} else if recipient, err = selectGPGKey(); err != nil {
+		} else if recipient, err = selectGPGKey(cmd.InOrStdin(), cmd.ErrOrStderr()); err != nil {
 			return err
 		}
 
@@ -55,7 +55,7 @@ and lets you select one interactively.`,
 }
 
 // selectGPGKey lists available GPG secret keys and prompts the user to pick one.
-func selectGPGKey() (string, error) {
+func selectGPGKey(in io.Reader, w io.Writer) (string, error) {
 	keys, err := crypto.ListSecretKeys()
 	if err != nil {
 		return "", fmt.Errorf("list GPG keys: %w", err)
@@ -65,20 +65,9 @@ func selectGPGKey() (string, error) {
 		return "", fmt.Errorf("no GPG secret keys found; generate one with: gpg --gen-key")
 	}
 
-	fmt.Fprintln(os.Stderr, "Available GPG secret keys:")
-	fmt.Fprintln(os.Stderr)
+	_, _ = io.WriteString(w, keyMenu(keys))
 
-	for i, k := range keys {
-		fmt.Fprintf(os.Stderr, "  %d) %s\n", i+1, k.KeyID)
-		for _, uid := range k.UIDs {
-			fmt.Fprintf(os.Stderr, "     %s\n", uid)
-		}
-		fmt.Fprintln(os.Stderr)
-	}
-
-	fmt.Fprintf(os.Stderr, "Select key [1-%d]: ", len(keys))
-
-	scanner := bufio.NewScanner(os.Stdin)
+	scanner := bufio.NewScanner(in)
 	if !scanner.Scan() {
 		return "", fmt.Errorf("no input received")
 	}
@@ -96,6 +85,23 @@ func selectGPGKey() (string, error) {
 		return selected.Fingerprint, nil
 	}
 	return selected.KeyID, nil
+}
+
+func keyMenu(keys []crypto.GPGKey) string {
+	var w strings.Builder
+	fmt.Fprintln(&w, "Available GPG secret keys:")
+	fmt.Fprintln(&w)
+
+	for i, k := range keys {
+		fmt.Fprintf(&w, "  %d) %s\n", i+1, k.KeyID)
+		for _, uid := range k.UIDs {
+			fmt.Fprintf(&w, "     %s\n", uid)
+		}
+		fmt.Fprintln(&w)
+	}
+
+	fmt.Fprintf(&w, "Select key [1-%d]: ", len(keys))
+	return w.String()
 }
 
 func init() {
