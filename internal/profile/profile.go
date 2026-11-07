@@ -95,12 +95,8 @@ func (m *Manager) Create(name string, data []byte) error {
 	}
 
 	return m.WithLock(func() error {
-		exists, err := m.Exists(name)
-		if err != nil {
+		if err := m.checkExists(name, false); err != nil {
 			return err
-		}
-		if exists {
-			return fmt.Errorf("profile %q already exists", name)
 		}
 
 		encrypted, err := crypto.Encrypt(data, m.cfg.Recipients())
@@ -225,24 +221,10 @@ func (m *Manager) Activate(name string) (path string, err error) {
 	}
 
 	err = m.WithLock(func() error {
-		cipherMtime, err := m.profileMtime(name)
-		if err != nil {
-			return err
-		}
-
 		var hit bool
-		path, hit, err = tmpfile.ProbeCached(name, cipherMtime)
+		path, hit, err = m.activationFile(name)
 		if err != nil {
 			return err
-		}
-		if !hit {
-			data, err := m.Decrypt(name)
-			if err != nil {
-				return err
-			}
-			if path, err = tmpfile.Create(name, data); err != nil {
-				return err
-			}
 		}
 
 		if err := m.setCurrent(name); err != nil {
@@ -258,6 +240,25 @@ func (m *Manager) Activate(name string) (path string, err error) {
 		return nil
 	})
 	return path, err
+}
+
+// activationFile returns the activation file path, creating it from the
+// ciphertext unless a fresh cached file exists (hit).
+func (m *Manager) activationFile(name string) (path string, hit bool, err error) {
+	cipherMtime, err := m.profileMtime(name)
+	if err != nil {
+		return "", false, err
+	}
+	path, hit, err = tmpfile.ProbeCached(name, cipherMtime)
+	if err != nil || hit {
+		return path, hit, err
+	}
+	data, err := m.Decrypt(name)
+	if err != nil {
+		return "", false, err
+	}
+	path, err = tmpfile.Create(name, data)
+	return path, false, err
 }
 
 // Unlock decrypts a profile to its runtime activation file while holding the
@@ -285,12 +286,8 @@ func (m *Manager) Delete(name string) error {
 	}
 
 	return m.WithLock(func() error {
-		exists, err := m.Exists(name)
-		if err != nil {
+		if err := m.checkExists(name, true); err != nil {
 			return err
-		}
-		if !exists {
-			return fmt.Errorf("profile %q not found", name)
 		}
 		current, err := m.GetCurrent()
 		if err != nil {
@@ -322,19 +319,11 @@ func (m *Manager) Rename(oldName, newName string) error {
 	}
 
 	return m.WithLock(func() error {
-		exists, err := m.Exists(oldName)
-		if err != nil {
+		if err := m.checkExists(oldName, true); err != nil {
 			return err
 		}
-		if !exists {
-			return fmt.Errorf("profile %q not found", oldName)
-		}
-		exists, err = m.Exists(newName)
-		if err != nil {
+		if err := m.checkExists(newName, false); err != nil {
 			return err
-		}
-		if exists {
-			return fmt.Errorf("profile %q already exists", newName)
 		}
 		current, err := m.GetCurrent()
 		if err != nil {
@@ -353,6 +342,21 @@ func (m *Manager) Rename(oldName, newName string) error {
 		}
 		return nil
 	})
+}
+
+// checkExists errors unless the profile's presence matches want.
+func (m *Manager) checkExists(name string, want bool) error {
+	exists, err := m.Exists(name)
+	if err != nil {
+		return err
+	}
+	if exists == want {
+		return nil
+	}
+	if want {
+		return fmt.Errorf("profile %q not found", name)
+	}
+	return fmt.Errorf("profile %q already exists", name)
 }
 
 // Exists reports whether a profile with the given name is stored locally.
