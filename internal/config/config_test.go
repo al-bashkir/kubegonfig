@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -273,6 +274,29 @@ func TestValidate(t *testing.T) {
 	}
 	if err := (&Config{GPGRecipients: []string{"user@example.com", ""}}).Validate(); err == nil {
 		t.Error("Validate() should fail with blank extra recipient")
+	}
+}
+
+func TestValidateMessages(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  Config
+		want string
+	}{
+		{"none", Config{}, "no GPG recipient configured"},
+		{"blank primary", Config{GPGRecipient: "  "}, "gpg_recipient must not be blank"},
+		{"blank extra", Config{GPGRecipients: []string{"a@example.com", " "}}, "gpg_recipients must not contain blank recipients"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.cfg.Validate()
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("Validate() error = %v, want %q", err, tt.want)
+			}
+		})
+	}
+	if err := (&Config{GPGRecipients: []string{"a@example.com", "b@example.com"}}).Validate(); err != nil {
+		t.Fatalf("Validate() valid list error: %v", err)
 	}
 }
 
