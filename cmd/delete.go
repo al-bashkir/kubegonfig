@@ -6,7 +6,6 @@ package cmd
 import (
 	"bufio"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -24,8 +23,8 @@ var deleteCmd = &cobra.Command{
 		name := args[0]
 
 		if !deleteForce {
-			fmt.Fprintf(os.Stderr, "Delete profile %q? [y/N] ", name)
-			scanner := bufio.NewScanner(os.Stdin)
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Delete profile %q? [y/N] ", name)
+			scanner := bufio.NewScanner(cmd.InOrStdin())
 			if !scanner.Scan() {
 				if err := scanner.Err(); err != nil {
 					return fmt.Errorf("read confirmation: %w", err)

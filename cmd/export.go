@@ -37,11 +37,11 @@ or when the destination resolves inside the kubegonfig data directory.
 Restore with: kubegonfig restore <archive>`,
 	ValidArgsFunction: completeProfileNames,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return runExport(args)
+		return runExport(args, cmd.OutOrStdout())
 	},
 }
 
-func runExport(args []string) error {
+func runExport(args []string, stdout io.Writer) error {
 	if exportOutput == "" {
 		return fmt.Errorf("--output/-o is required (use \"-\" for stdout)")
 	}
@@ -77,7 +77,7 @@ func runExport(args []string) error {
 	}
 
 	if exportOutput == "-" {
-		opts.Out = os.Stdout
+		opts.Out = stdout
 		return bundle.Export(mgr, cfg, opts)
 	}
 

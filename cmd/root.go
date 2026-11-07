@@ -116,6 +116,6 @@ func Execute() {
 // info prints a message to stderr unless quiet mode is on.
 func info(format string, args ...any) {
 	if !quiet {
-		fmt.Fprintf(os.Stderr, format+"\n", args...)
+		_, _ = fmt.Fprintf(rootCmd.ErrOrStderr(), format+"\n", args...)
 	}
 }
