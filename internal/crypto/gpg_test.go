@@ -6,6 +6,7 @@ package crypto
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -144,6 +145,106 @@ func TestEncrypt_NoRecipients(t *testing.T) {
 	_, err = Encrypt([]byte("test"), []string{})
 	if err == nil {
 		t.Error("Encrypt(empty recipients) should return error")
+	}
+}
+
+func writeFakeGPG(t *testing.T, body string) {
+	t.Helper()
+	dir := t.TempDir()
+	for _, name := range []string{"gpg2", "gpg"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("#!/bin/sh\n"+body+"\n"), 0700); err != nil {
+			t.Fatalf("write fake gpg: %v", err)
+		}
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
+func TestEncryptPassesRecipientsAndStdin(t *testing.T) {
+	writeFakeGPG(t, `echo "$@"; cat`)
+	out, err := Encrypt([]byte("plain"), []string{"a@x", "B2"})
+	if err != nil {
+		t.Fatalf("Encrypt() error = %v", err)
+	}
+	want := "--batch --yes --encrypt --armor --trust-model always --recipient a@x --recipient B2\nplain"
+	if string(out) != want {
+		t.Errorf("Encrypt() = %q, want %q", out, want)
+	}
+}
+
+func TestDecryptPassesArgsAndStdin(t *testing.T) {
+	writeFakeGPG(t, `echo "$@"; cat`)
+	out, err := Decrypt([]byte("cipher"))
+	if err != nil {
+		t.Fatalf("Decrypt() error = %v", err)
+	}
+	if want := "--batch --yes --decrypt\ncipher"; string(out) != want {
+		t.Errorf("Decrypt() = %q, want %q", out, want)
+	}
+}
+
+func TestRunGPGFailureIsWrappedAndSanitized(t *testing.T) {
+	writeFakeGPG(t, `echo "gpg: decryption failed: No secret key" >&2
+echo "client-key-data: SECRET" >&2
+exit 2`)
+	out, err := Decrypt([]byte("cipher"))
+	if err == nil {
+		t.Fatal("Decrypt() error = nil, want failure")
+	}
+	if out != nil {
+		t.Errorf("Decrypt() output = %q, want nil", out)
+	}
+	msg := err.Error()
+	if !strings.HasPrefix(msg, "gpg decrypt: gpg: decryption failed: No secret key: ") || !strings.Contains(msg, "exit status 2") {
+		t.Errorf("error = %q", msg)
+	}
+	if strings.Contains(msg, "SECRET") {
+		t.Errorf("error leaks stderr data: %q", msg)
+	}
+}
+
+func TestRunGPGMissingBinary(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	if _, err := Decrypt(nil); err == nil || !strings.Contains(err.Error(), "gpg not found") {
+		t.Errorf("Decrypt() error = %v, want gpg not found", err)
+	}
+}
+
+func TestListSecretKeys(t *testing.T) {
+	writeFakeGPG(t, `if [ "$*" != "--list-secret-keys --with-colons" ]; then echo "bad args: $*" >&2; exit 1; fi
+cat <<'EOF'
+tru::1:1700000000:0:3:1:5
+short:line
+fpr:::::::::ORPHANFPR:
+uid:u::::1700000000::HASH::Orphan <o@x>:
+sec:u:255:22:AAAA1111AAAA1111:1700000000:::u:::scESC:::+:::23::0:
+fpr:::::::::PRIMARYFPR1:
+uid:u::::1700000000::HASH1::Alice <a@x>:
+uid:u::::1700000000::HASH2::Alice Work <a@w>:
+uid:u::::1700000000::HASH3:::
+uid:::::::::Bob <b@x>
+ssb:u:255:18:SUBKEYID:1700000000::::::e:::+:::23:
+fpr:::::::::SUBFPR:
+sec:u:255:22:BBBB2222BBBB2222:1700000000:::u:::scESC:::+:::23::0:
+fpr:::
+EOF`)
+	keys, err := ListSecretKeys()
+	if err != nil {
+		t.Fatalf("ListSecretKeys() error = %v", err)
+	}
+	want := []GPGKey{
+		{KeyID: "AAAA1111AAAA1111", Fingerprint: "PRIMARYFPR1", UIDs: []string{"Alice <a@x>", "Alice Work <a@w>", "Bob <b@x>"}},
+		{KeyID: "BBBB2222BBBB2222"},
+	}
+	if !reflect.DeepEqual(keys, want) {
+		t.Errorf("ListSecretKeys() = %+v, want %+v", keys, want)
+	}
+}
+
+func TestListSecretKeysError(t *testing.T) {
+	writeFakeGPG(t, `echo "gpg: keyring broken" >&2; exit 2`)
+	keys, err := ListSecretKeys()
+	if err == nil || !strings.Contains(err.Error(), "gpg list-secret-keys: gpg: keyring broken") {
+		t.Errorf("ListSecretKeys() = %v, %v", keys, err)
 	}
 }
 
