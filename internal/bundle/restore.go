@@ -67,125 +67,176 @@ func Restore(mgr *profile.Manager, cfg *config.Config, opts RestoreOptions) (Res
 		return plan, err
 	}
 
-	wantedFiles := make(map[string]string, len(manifest.Profiles))
-	for _, p := range manifest.Profiles {
-		wantedFiles[p.File] = p.Name
-	}
-
 	err = mgr.WithLock(func() error {
-		var collisions []string
-		for _, p := range manifest.Profiles {
-			exists, err := mgr.Exists(p.Name)
-			if err != nil {
-				return fmt.Errorf("check profile %q: %w", p.Name, err)
-			}
-			switch {
-			case !exists:
-				plan.ToCreate = append(plan.ToCreate, p.Name)
-			case opts.Force:
-				plan.ToOverwrite = append(plan.ToOverwrite, p.Name)
-			case opts.SkipExisting:
-				plan.ToSkip = append(plan.ToSkip, p.Name)
-			default:
-				collisions = append(collisions, p.Name)
-			}
+		var err error
+		plan, err = planRestore(mgr, manifest, opts)
+		if err != nil || opts.DryRun {
+			return err
 		}
-		if len(collisions) > 0 {
-			sort.Strings(collisions)
-			return fmt.Errorf("restore: %d profile(s) already exist: %s; pass --force to overwrite or --skip-existing to keep local copies",
-				len(collisions), strings.Join(collisions, ", "))
-		}
-
-		plan.ConfigAction = "ignore"
-		if opts.MergeConfig && manifest.ConfigIncluded {
-			plan.ConfigAction = "merge"
-		}
-
-		if opts.DryRun {
-			return nil
-		}
-
-		if _, err := tmp.Seek(0, io.SeekStart); err != nil {
-			return fmt.Errorf("rewind archive for apply: %w", err)
-		}
-		tr := tar.NewReader(tmp)
-		if _, err := tr.Next(); err != nil {
-			return fmt.Errorf("re-read manifest entry: %w", err)
-		}
-
-		skip := make(map[string]struct{}, len(plan.ToSkip))
-		for _, n := range plan.ToSkip {
-			skip[n] = struct{}{}
-		}
-
-		var writeErrs []error
-		for {
-			hdr, err := tr.Next()
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				return fmt.Errorf("read archive entry: %w", err)
-			}
-			if hdr.Typeflag != tar.TypeReg {
-				return fmt.Errorf("archive entry %q has disallowed type %d", hdr.Name, hdr.Typeflag)
-			}
-			// Entry names must match ConfigName or a manifest-listed file exactly;
-			// that allowlist rejects absolute and traversal paths.
-			switch {
-			case hdr.Name == ConfigName:
-				if plan.ConfigAction != "merge" {
-					if _, err := io.Copy(io.Discard, tr); err != nil {
-						return fmt.Errorf("skip config body: %w", err)
-					}
-					continue
-				}
-				body, err := io.ReadAll(io.LimitReader(tr, MaxProfileSize+1))
-				if err != nil {
-					writeErrs = append(writeErrs, fmt.Errorf("read config.yaml: %w", err))
-					continue
-				}
-				if int64(len(body)) > int64(MaxProfileSize) {
-					return fmt.Errorf("archive entry %q exceeds %d byte limit", hdr.Name, MaxProfileSize)
-				}
-				if err := mergeArchivedConfig(cfg, body); err != nil {
-					writeErrs = append(writeErrs, fmt.Errorf("merge config: %w", err))
-				}
-			case strings.HasPrefix(hdr.Name, ProfilesDir):
-				name, ok := wantedFiles[hdr.Name]
-				if !ok {
-					return fmt.Errorf("archive entry %q is not listed in manifest", hdr.Name)
-				}
-				if _, skipIt := skip[name]; skipIt {
-					if _, err := io.Copy(io.Discard, tr); err != nil {
-						return fmt.Errorf("skip body for %q: %w", name, err)
-					}
-					continue
-				}
-				body, err := io.ReadAll(io.LimitReader(tr, MaxProfileSize+1))
-				if err != nil {
-					writeErrs = append(writeErrs, fmt.Errorf("read entry %q: %w", hdr.Name, err))
-					continue
-				}
-				if int64(len(body)) > int64(MaxProfileSize) {
-					return fmt.Errorf("archive entry %q exceeds %d byte limit", hdr.Name, MaxProfileSize)
-				}
-				blob, err := prepareProfileBlob(cfg, manifest.Encrypted, body)
-				if err != nil {
-					writeErrs = append(writeErrs, fmt.Errorf("profile %q: %w", name, err))
-					continue
-				}
-				if err := mgr.WriteEncrypted(name, blob); err != nil {
-					writeErrs = append(writeErrs, fmt.Errorf("profile %q: %w", name, err))
-					continue
-				}
-			default:
-				return fmt.Errorf("archive entry %q is not allowed", hdr.Name)
-			}
-		}
-		return errors.Join(writeErrs...)
+		return applyRestore(mgr, cfg, tmp, manifest, plan)
 	})
 	return plan, err
+}
+
+// planRestore classifies every manifest profile against the local store and
+// decides the config action. Must run under the profile lock.
+func planRestore(mgr *profile.Manager, manifest *Manifest, opts RestoreOptions) (RestorePlan, error) {
+	plan := RestorePlan{}
+	var collisions []string
+	for _, p := range manifest.Profiles {
+		exists, err := mgr.Exists(p.Name)
+		if err != nil {
+			return plan, fmt.Errorf("check profile %q: %w", p.Name, err)
+		}
+		switch {
+		case !exists:
+			plan.ToCreate = append(plan.ToCreate, p.Name)
+		case opts.Force:
+			plan.ToOverwrite = append(plan.ToOverwrite, p.Name)
+		case opts.SkipExisting:
+			plan.ToSkip = append(plan.ToSkip, p.Name)
+		default:
+			collisions = append(collisions, p.Name)
+		}
+	}
+	if len(collisions) > 0 {
+		sort.Strings(collisions)
+		return plan, fmt.Errorf("restore: %d profile(s) already exist: %s; pass --force to overwrite or --skip-existing to keep local copies",
+			len(collisions), strings.Join(collisions, ", "))
+	}
+
+	plan.ConfigAction = "ignore"
+	if wantsConfigMerge(opts, manifest) {
+		plan.ConfigAction = "merge"
+	}
+	return plan, nil
+}
+
+func wantsConfigMerge(opts RestoreOptions, manifest *Manifest) bool {
+	return opts.MergeConfig && manifest.ConfigIncluded
+}
+
+// restorer holds the state of one apply pass over the archive.
+type restorer struct {
+	mgr      *profile.Manager
+	cfg      *config.Config
+	manifest *Manifest
+	plan     RestorePlan
+	wanted   map[string]string   // archive file -> profile name
+	skip     map[string]struct{} // profile names to keep local
+	// writeErrs collects per-entry failures so one bad entry does not stop the rest.
+	writeErrs []error
+}
+
+// applyRestore replays the buffered archive (past the manifest) into mgr/cfg.
+func applyRestore(mgr *profile.Manager, cfg *config.Config, tmp io.ReadSeeker, manifest *Manifest, plan RestorePlan) error {
+	if _, err := tmp.Seek(0, io.SeekStart); err != nil {
+		return fmt.Errorf("rewind archive for apply: %w", err)
+	}
+	tr := tar.NewReader(tmp)
+	if _, err := tr.Next(); err != nil {
+		return fmt.Errorf("re-read manifest entry: %w", err)
+	}
+
+	r := newRestorer(mgr, cfg, manifest, plan)
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return fmt.Errorf("read archive entry: %w", err)
+		}
+		if err := r.entry(tr, hdr); err != nil {
+			return err
+		}
+	}
+	return errors.Join(r.writeErrs...)
+}
+
+func newRestorer(mgr *profile.Manager, cfg *config.Config, manifest *Manifest, plan RestorePlan) *restorer {
+	r := &restorer{
+		mgr: mgr, cfg: cfg, manifest: manifest, plan: plan,
+		wanted: make(map[string]string, len(manifest.Profiles)),
+		skip:   make(map[string]struct{}, len(plan.ToSkip)),
+	}
+	for _, p := range manifest.Profiles {
+		r.wanted[p.File] = p.Name
+	}
+	for _, n := range plan.ToSkip {
+		r.skip[n] = struct{}{}
+	}
+	return r
+}
+
+// entry dispatches one archive entry. A non-nil return aborts the restore.
+func (r *restorer) entry(tr *tar.Reader, hdr *tar.Header) error {
+	if hdr.Typeflag != tar.TypeReg {
+		return fmt.Errorf("archive entry %q has disallowed type %d", hdr.Name, hdr.Typeflag)
+	}
+	// Entry names must match ConfigName or a manifest-listed file exactly;
+	// that allowlist rejects absolute and traversal paths.
+	switch {
+	case hdr.Name == ConfigName:
+		return r.configEntry(tr, hdr)
+	case strings.HasPrefix(hdr.Name, ProfilesDir):
+		return r.profileEntry(tr, hdr)
+	default:
+		return fmt.Errorf("archive entry %q is not allowed", hdr.Name)
+	}
+}
+
+// configEntry merges the archived config when the plan asks for it. A non-nil
+// return aborts the restore; recoverable failures go to r.writeErrs.
+func (r *restorer) configEntry(tr *tar.Reader, hdr *tar.Header) error {
+	if r.plan.ConfigAction != "merge" {
+		if _, err := io.Copy(io.Discard, tr); err != nil {
+			return fmt.Errorf("skip config body: %w", err)
+		}
+		return nil
+	}
+	body, err := io.ReadAll(io.LimitReader(tr, MaxProfileSize+1))
+	if err != nil {
+		r.writeErrs = append(r.writeErrs, fmt.Errorf("read config.yaml: %w", err))
+		return nil
+	}
+	if int64(len(body)) > int64(MaxProfileSize) {
+		return fmt.Errorf("archive entry %q exceeds %d byte limit", hdr.Name, MaxProfileSize)
+	}
+	if err := mergeArchivedConfig(r.cfg, body); err != nil {
+		r.writeErrs = append(r.writeErrs, fmt.Errorf("merge config: %w", err))
+	}
+	return nil
+}
+
+// profileEntry stores one archived profile unless the plan skips it.
+func (r *restorer) profileEntry(tr *tar.Reader, hdr *tar.Header) error {
+	name, ok := r.wanted[hdr.Name]
+	if !ok {
+		return fmt.Errorf("archive entry %q is not listed in manifest", hdr.Name)
+	}
+	if _, skipIt := r.skip[name]; skipIt {
+		if _, err := io.Copy(io.Discard, tr); err != nil {
+			return fmt.Errorf("skip body for %q: %w", name, err)
+		}
+		return nil
+	}
+	body, err := io.ReadAll(io.LimitReader(tr, MaxProfileSize+1))
+	if err != nil {
+		r.writeErrs = append(r.writeErrs, fmt.Errorf("read entry %q: %w", hdr.Name, err))
+		return nil
+	}
+	if int64(len(body)) > int64(MaxProfileSize) {
+		return fmt.Errorf("archive entry %q exceeds %d byte limit", hdr.Name, MaxProfileSize)
+	}
+	blob, err := prepareProfileBlob(r.cfg, r.manifest.Encrypted, body)
+	if err == nil {
+		err = r.mgr.WriteEncrypted(name, blob)
+	}
+	if err != nil {
+		r.writeErrs = append(r.writeErrs, fmt.Errorf("profile %q: %w", name, err))
+	}
+	return nil
 }
 
 func readManifest(rs io.ReadSeeker) (*Manifest, error) {
