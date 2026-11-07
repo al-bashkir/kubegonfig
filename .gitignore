@@ -18,6 +18,10 @@ graphify-out/.rebuild.lock
 .graphify_python
 .graphify_*.json
 
+# crapper / dryer / mutator output
+.metrics/
+target/
+
 # IDE
 .idea/
 .vscode/
