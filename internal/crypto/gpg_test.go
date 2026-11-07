@@ -88,6 +88,50 @@ func TestSanitizeGPGErrorCapsOutput(t *testing.T) {
 	}
 }
 
+func TestSanitizeGPGErrorKeywordDropsGPGPrefixedLine(t *testing.T) {
+	// The gpg: prefix would make the line safe; only the keyword filter drops it.
+	got := sanitizeGPGError("gpg: ok\ngpg: client-key-data: abc\ngpg: token: xyz\n")
+	if got != "gpg: ok" {
+		t.Errorf("sanitizeGPGError() = %q, want %q", got, "gpg: ok")
+	}
+}
+
+func TestSanitizeGPGErrorBase64LineDropped(t *testing.T) {
+	got := sanitizeGPGError("secret key not available\n" + strings.Repeat("A", 80) + "\n")
+	if got != "secret key not available" {
+		t.Errorf("sanitizeGPGError() = %q", got)
+	}
+}
+
+func TestSanitizeGPGErrorLineLengthBoundary(t *testing.T) {
+	atLimit := "gpg: " + strings.Repeat("x", maxGPGErrorLineLen-5)
+	over := atLimit + "x"
+	if got := sanitizeGPGError(atLimit); got != atLimit {
+		t.Errorf("line of %d bytes should be kept, got %q", len(atLimit), got)
+	}
+	if got := sanitizeGPGError(over); got != "unknown gpg error" {
+		t.Errorf("line of %d bytes should be dropped, got %q", len(over), got)
+	}
+}
+
+func TestSanitizeGPGErrorTotalLengthBoundary(t *testing.T) {
+	// Lines of 199, 199, 199 and 197 bytes joined by "; " give exactly 800 bytes.
+	line := "gpg: " + strings.Repeat("x", 194)
+	last := "gpg: " + strings.Repeat("x", 192)
+	stderr := strings.Join([]string{line, line, line, last}, "\n")
+	want := strings.Join([]string{line, line, line, last}, "; ")
+	if len(want) != maxGPGErrorLen {
+		t.Fatalf("test setup: len = %d", len(want))
+	}
+	if got := sanitizeGPGError(stderr); got != want {
+		t.Errorf("message at limit must not be truncated, got len %d", len(got))
+	}
+	got := sanitizeGPGError(stderr + "x")
+	if !strings.HasSuffix(got, "... (truncated)") || len(got) != maxGPGErrorLen+len("... (truncated)") {
+		t.Errorf("message over limit must be truncated, got len %d", len(got))
+	}
+}
+
 func TestEncrypt_NoRecipients(t *testing.T) {
 	_, err := Encrypt([]byte("test"), nil)
 	if err == nil {
