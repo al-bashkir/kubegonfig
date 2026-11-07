@@ -145,6 +145,9 @@ func Restore(mgr *profile.Manager, cfg *config.Config, opts RestoreOptions) (Res
 					writeErrs = append(writeErrs, fmt.Errorf("read config.yaml: %w", err))
 					continue
 				}
+				if int64(len(body)) > int64(MaxProfileSize) {
+					return fmt.Errorf("archive entry %q exceeds %d byte limit", hdr.Name, MaxProfileSize)
+				}
 				if err := mergeArchivedConfig(cfg, body); err != nil {
 					writeErrs = append(writeErrs, fmt.Errorf("merge config: %w", err))
 				}

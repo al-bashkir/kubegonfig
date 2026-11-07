@@ -6,6 +6,7 @@ package bundle
 import (
 	"archive/tar"
 	"bytes"
+	"fmt"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -137,6 +138,37 @@ func TestRestore_AcceptsProfileOfExactlyMaxSize(t *testing.T) {
 	}
 	if got, _ := dst.ReadEncrypted("alpha"); len(got) != MaxProfileSize {
 		t.Errorf("stored %d bytes, want %d", len(got), MaxProfileSize)
+	}
+}
+
+func TestRestore_RejectsOversizedConfig(t *testing.T) {
+	big := "gpg_recipients: [a@example.com]\n#" + strings.Repeat("x", MaxProfileSize)
+	archive := buildEncryptedArchive(t, map[string][]byte{"alpha": []byte("a")}, []byte(big))
+	cfg := newConfigOnDisk(t)
+	mgr, _ := profile.NewManager(cfg)
+
+	_, err := Restore(mgr, cfg, RestoreOptions{In: bytes.NewReader(archive), MergeConfig: true})
+	want := fmt.Sprintf("archive entry %q exceeds %d byte limit", ConfigName, MaxProfileSize)
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Fatalf("Restore() error = %v, want %q", err, want)
+	}
+	if len(cfg.GPGRecipients) != 0 {
+		t.Errorf("truncated config merged: %v", cfg.GPGRecipients)
+	}
+}
+
+func TestRestore_AcceptsConfigOfExactlyMaxSize(t *testing.T) {
+	head := "gpg_recipients: [a@example.com]\n#"
+	body := head + strings.Repeat("x", MaxProfileSize-len(head))
+	archive := buildEncryptedArchive(t, map[string][]byte{"alpha": []byte("a")}, []byte(body))
+	cfg := newConfigOnDisk(t)
+	mgr, _ := profile.NewManager(cfg)
+
+	if _, err := Restore(mgr, cfg, RestoreOptions{In: bytes.NewReader(archive), MergeConfig: true}); err != nil {
+		t.Fatalf("Restore() error: %v", err)
+	}
+	if !reflect.DeepEqual(cfg.GPGRecipients, []string{"a@example.com"}) {
+		t.Errorf("GPGRecipients = %v", cfg.GPGRecipients)
 	}
 }
 
