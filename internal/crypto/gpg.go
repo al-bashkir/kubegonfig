@@ -88,8 +88,14 @@ func ListSecretKeys() ([]GPGKey, error) {
 		return nil, err
 	}
 
-	var keys []GPGKey
-	var current *GPGKey
+	return parseSecretKeys(out), nil
+}
+
+// parseSecretKeys parses gpg --with-colons output. The first fpr after a sec
+// line is the primary fingerprint; later ones (subkeys) are ignored.
+func parseSecretKeys(out []byte) []GPGKey {
+	// keys[0] is a sink for fpr/uid lines before the first sec; it is dropped.
+	keys := []GPGKey{{}}
 
 	for _, line := range strings.Split(string(out), "\n") {
 		fields := strings.Split(line, ":")
@@ -97,25 +103,22 @@ func ListSecretKeys() ([]GPGKey, error) {
 			continue
 		}
 
+		current := &keys[len(keys)-1]
 		switch fields[0] {
 		case "sec":
 			keys = append(keys, GPGKey{KeyID: fields[4]})
-			current = &keys[len(keys)-1]
 		case "fpr":
-			if current != nil && current.Fingerprint == "" {
+			if current.Fingerprint == "" {
 				current.Fingerprint = fields[9]
 			}
 		case "uid":
-			if current != nil {
-				uid := fields[9]
-				if uid != "" {
-					current.UIDs = append(current.UIDs, uid)
-				}
+			if fields[9] != "" {
+				current.UIDs = append(current.UIDs, fields[9])
 			}
 		}
 	}
 
-	return keys, nil
+	return keys[1:]
 }
 
 // sanitizeGPGError keeps short actionable GPG diagnostics while dropping lines
