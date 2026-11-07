@@ -45,23 +45,9 @@ func runExport(args []string, stdout io.Writer) error {
 	if exportOutput == "" {
 		return fmt.Errorf("--output/-o is required (use \"-\" for stdout)")
 	}
-	if exportAll && len(args) > 0 {
-		return fmt.Errorf("--all is mutually exclusive with positional profile names")
-	}
-	if !exportAll && len(args) == 0 {
-		return fmt.Errorf("specify profile names or --all")
-	}
-
-	names := args
-	if exportAll {
-		all, err := mgr.List()
-		if err != nil {
-			return fmt.Errorf("list profiles: %w", err)
-		}
-		if len(all) == 0 {
-			return fmt.Errorf("no profiles to export")
-		}
-		names = all
+	names, err := exportNames(args)
+	if err != nil {
+		return err
 	}
 	if exportDecrypt {
 		if err := guardPlaintextDestination(exportOutput); err != nil {
@@ -97,6 +83,27 @@ func runExport(args []string, stdout io.Writer) error {
 	}
 	info("Wrote %s", abs)
 	return nil
+}
+
+// exportNames resolves the profiles to export from positional args or --all.
+func exportNames(args []string) ([]string, error) {
+	if exportAll && len(args) > 0 {
+		return nil, fmt.Errorf("--all is mutually exclusive with positional profile names")
+	}
+	if !exportAll && len(args) == 0 {
+		return nil, fmt.Errorf("specify profile names or --all")
+	}
+	if !exportAll {
+		return args, nil
+	}
+	all, err := mgr.List()
+	if err != nil {
+		return nil, fmt.Errorf("list profiles: %w", err)
+	}
+	if len(all) == 0 {
+		return nil, fmt.Errorf("no profiles to export")
+	}
+	return all, nil
 }
 
 // guardPlaintextDestination refuses --decrypt output to a TTY or to a path
