@@ -56,6 +56,32 @@ func Validate(data []byte) error {
 		return fmt.Errorf("invalid YAML: %w", err)
 	}
 
+	if err := checkRequired(&kc); err != nil {
+		return err
+	}
+	clusterNames, err := checkClusters(kc.Clusters)
+	if err != nil {
+		return err
+	}
+	// Users are checked before contexts reference them.
+	userNames, err := checkUsers(kc.Users)
+	if err != nil {
+		return err
+	}
+	contextNames, err := checkContexts(kc.Contexts, clusterNames, userNames)
+	if err != nil {
+		return err
+	}
+	if kc.CurrentContext != "" {
+		if _, ok := contextNames[kc.CurrentContext]; !ok {
+			return fmt.Errorf("current-context %q: unknown context", kc.CurrentContext)
+		}
+	}
+	return nil
+}
+
+// checkRequired verifies the header fields and that each section is non-empty.
+func checkRequired(kc *kubeConfig) error {
 	if kc.APIVersion != "v1" {
 		return fmt.Errorf("unsupported apiVersion: %q (expected \"v1\")", kc.APIVersion)
 	}
@@ -71,62 +97,73 @@ func Validate(data []byte) error {
 	if len(kc.Users) == 0 {
 		return fmt.Errorf("kubeconfig has no users defined")
 	}
+	return nil
+}
 
-	// Validate cluster entries have minimum required fields.
-	clusterNames := make(map[string]struct{}, len(kc.Clusters))
-	for i, c := range kc.Clusters {
-		if c.Name == "" {
-			return fmt.Errorf("cluster[%d]: missing name", i)
-		}
-		if _, ok := clusterNames[c.Name]; ok {
-			return fmt.Errorf("cluster[%d] %q: duplicate name", i, c.Name)
+// checkClusters verifies cluster entries and returns the set of their names.
+func checkClusters(clusters []clusterEntry) (map[string]struct{}, error) {
+	names := make(map[string]struct{}, len(clusters))
+	for i, c := range clusters {
+		if err := claimName(names, "cluster", i, c.Name); err != nil {
+			return nil, err
 		}
 		if c.Cluster.Server == "" {
-			return fmt.Errorf("cluster[%d] %q: missing server", i, c.Name)
+			return nil, fmt.Errorf("cluster[%d] %q: missing server", i, c.Name)
 		}
-		clusterNames[c.Name] = struct{}{}
 	}
+	return names, nil
+}
 
-	// Validate user entries have names before contexts reference them.
-	userNames := make(map[string]struct{}, len(kc.Users))
-	for i, u := range kc.Users {
-		if u.Name == "" {
-			return fmt.Errorf("user[%d]: missing name", i)
-		}
-		if _, ok := userNames[u.Name]; ok {
-			return fmt.Errorf("user[%d] %q: duplicate name", i, u.Name)
-		}
-		userNames[u.Name] = struct{}{}
+// claimName adds name to names, rejecting blank and duplicate names.
+func claimName(names map[string]struct{}, kind string, i int, name string) error {
+	if name == "" {
+		return fmt.Errorf("%s[%d]: missing name", kind, i)
 	}
+	if _, ok := names[name]; ok {
+		return fmt.Errorf("%s[%d] %q: duplicate name", kind, i, name)
+	}
+	names[name] = struct{}{}
+	return nil
+}
 
-	// Validate context entries reference defined clusters and users.
-	contextNames := make(map[string]struct{}, len(kc.Contexts))
-	for i, ctx := range kc.Contexts {
-		if ctx.Name == "" {
-			return fmt.Errorf("context[%d]: missing name", i)
-		}
-		if _, ok := contextNames[ctx.Name]; ok {
-			return fmt.Errorf("context[%d] %q: duplicate name", i, ctx.Name)
-		}
-		contextNames[ctx.Name] = struct{}{}
-		if ctx.Context.Cluster == "" {
-			return fmt.Errorf("context[%d] %q: missing cluster reference", i, ctx.Name)
-		}
-		if _, ok := clusterNames[ctx.Context.Cluster]; !ok {
-			return fmt.Errorf("context[%d] %q: unknown cluster reference %q", i, ctx.Name, ctx.Context.Cluster)
-		}
-		if ctx.Context.User == "" {
-			return fmt.Errorf("context[%d] %q: missing user reference", i, ctx.Name)
-		}
-		if _, ok := userNames[ctx.Context.User]; !ok {
-			return fmt.Errorf("context[%d] %q: unknown user reference %q", i, ctx.Name, ctx.Context.User)
+// checkUsers verifies user entries and returns the set of their names.
+func checkUsers(users []userEntry) (map[string]struct{}, error) {
+	names := make(map[string]struct{}, len(users))
+	for i, u := range users {
+		if err := claimName(names, "user", i, u.Name); err != nil {
+			return nil, err
 		}
 	}
-	if kc.CurrentContext != "" {
-		if _, ok := contextNames[kc.CurrentContext]; !ok {
-			return fmt.Errorf("current-context %q: unknown context", kc.CurrentContext)
-		}
-	}
+	return names, nil
+}
 
+// checkContexts verifies context entries reference defined clusters and users
+// and returns the set of their names.
+func checkContexts(contexts []contextEntry, clusterNames, userNames map[string]struct{}) (map[string]struct{}, error) {
+	names := make(map[string]struct{}, len(contexts))
+	for i, ctx := range contexts {
+		if err := claimName(names, "context", i, ctx.Name); err != nil {
+			return nil, err
+		}
+		if err := checkContextRefs(i, ctx, clusterNames, userNames); err != nil {
+			return nil, err
+		}
+	}
+	return names, nil
+}
+
+func checkContextRefs(i int, ctx contextEntry, clusterNames, userNames map[string]struct{}) error {
+	if ctx.Context.Cluster == "" {
+		return fmt.Errorf("context[%d] %q: missing cluster reference", i, ctx.Name)
+	}
+	if _, ok := clusterNames[ctx.Context.Cluster]; !ok {
+		return fmt.Errorf("context[%d] %q: unknown cluster reference %q", i, ctx.Name, ctx.Context.Cluster)
+	}
+	if ctx.Context.User == "" {
+		return fmt.Errorf("context[%d] %q: missing user reference", i, ctx.Name)
+	}
+	if _, ok := userNames[ctx.Context.User]; !ok {
+		return fmt.Errorf("context[%d] %q: unknown user reference %q", i, ctx.Name, ctx.Context.User)
+	}
 	return nil
 }
