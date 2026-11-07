@@ -59,60 +59,69 @@ func Export(mgr *profile.Manager, cfg *config.Config, opts ExportOptions) error 
 	}
 
 	return mgr.WithLock(func() error {
-		now := time.Now().UTC().Truncate(time.Second)
-		ext := EncryptedExt
-		if opts.Decrypt {
-			ext = PlaintextExt
-		}
-
 		manifest := &Manifest{
 			SchemaVersion:     SchemaVersion,
-			CreatedAt:         now,
+			CreatedAt:         time.Now().UTC().Truncate(time.Second),
 			KubegonfigVersion: opts.KubegonfigVersion,
 			Encrypted:         !opts.Decrypt,
 			ProfileCount:      len(names),
-			Profiles:          make([]ManifestProfile, 0, len(names)),
 			ConfigIncluded:    opts.IncludeConfig,
 		}
-
-		bodies := make(map[string][]byte, len(names))
-		for _, name := range names {
-			data, err := readProfileForExport(mgr, name, opts.Decrypt)
-			if err != nil {
-				return err
-			}
-			bodies[name] = data
-			manifest.Profiles = append(manifest.Profiles, ManifestProfile{
-				Name: name,
-				File: ProfilesDir + name + ext,
-			})
-		}
-
-		manifestBody, err := yaml.Marshal(manifest)
+		bodies, err := collectExportProfiles(mgr, manifest, names, opts.Decrypt)
 		if err != nil {
-			return fmt.Errorf("marshal manifest: %w", err)
-		}
-
-		tw := tar.NewWriter(opts.Out)
-		if err := writeTarEntry(tw, ManifestName, manifestBody, now); err != nil {
 			return err
 		}
-		for _, name := range names {
-			if err := writeTarEntry(tw, ProfilesDir+name+ext, bodies[name], now); err != nil {
-				return err
-			}
-		}
-		if opts.IncludeConfig {
-			configBody, err := storage.ReadFileInDir(filepath.Dir(cfg.Path), filepath.Base(cfg.Path))
-			if err != nil {
-				return fmt.Errorf("read config.yaml: %w", err)
-			}
-			if err := writeTarEntry(tw, ConfigName, configBody, now); err != nil {
-				return err
-			}
-		}
-		return tw.Close()
+		return writeExportArchive(opts.Out, cfg, manifest, bodies, opts.IncludeConfig)
 	})
+}
+
+// writeExportArchive writes the manifest first, then profiles, then the
+// optional config.yaml, as one tar stream.
+func writeExportArchive(out io.Writer, cfg *config.Config, manifest *Manifest, bodies map[string][]byte, includeConfig bool) error {
+	manifestBody, err := yaml.Marshal(manifest)
+	if err != nil {
+		return fmt.Errorf("marshal manifest: %w", err)
+	}
+
+	now := manifest.CreatedAt
+	tw := tar.NewWriter(out)
+	if err := writeTarEntry(tw, ManifestName, manifestBody, now); err != nil {
+		return err
+	}
+	for _, p := range manifest.Profiles {
+		if err := writeTarEntry(tw, p.File, bodies[p.Name], now); err != nil {
+			return err
+		}
+	}
+	if includeConfig {
+		configBody, err := storage.ReadFileInDir(filepath.Dir(cfg.Path), filepath.Base(cfg.Path))
+		if err != nil {
+			return fmt.Errorf("read config.yaml: %w", err)
+		}
+		if err := writeTarEntry(tw, ConfigName, configBody, now); err != nil {
+			return err
+		}
+	}
+	return tw.Close()
+}
+
+// collectExportProfiles reads each profile body and fills manifest.Profiles.
+func collectExportProfiles(mgr *profile.Manager, manifest *Manifest, names []string, decrypt bool) (map[string][]byte, error) {
+	ext := EncryptedExt
+	if decrypt {
+		ext = PlaintextExt
+	}
+	bodies := make(map[string][]byte, len(names))
+	manifest.Profiles = make([]ManifestProfile, 0, len(names))
+	for _, name := range names {
+		data, err := readProfileForExport(mgr, name, decrypt)
+		if err != nil {
+			return nil, err
+		}
+		bodies[name] = data
+		manifest.Profiles = append(manifest.Profiles, ManifestProfile{Name: name, File: ProfilesDir + name + ext})
+	}
+	return bodies, nil
 }
 
 func readProfileForExport(mgr *profile.Manager, name string, decrypt bool) ([]byte, error) {

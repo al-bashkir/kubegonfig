@@ -96,17 +96,25 @@ func (m *Manifest) validate() error {
 	}
 	seen := make(map[string]struct{}, len(m.Profiles))
 	for i, p := range m.Profiles {
-		if err := shell.ValidateName(p.Name); err != nil {
-			return fmt.Errorf("manifest profiles[%d]: %w", i, err)
+		if err := p.validate(i, wantExt, seen); err != nil {
+			return err
 		}
-		if _, dup := seen[p.Name]; dup {
-			return fmt.Errorf("manifest profiles[%d]: duplicate name %q", i, p.Name)
-		}
-		seen[p.Name] = struct{}{}
-		want := ProfilesDir + p.Name + wantExt
-		if p.File != want {
-			return fmt.Errorf("manifest profiles[%d]: file %q does not match expected %q", i, p.File, want)
-		}
+	}
+	return nil
+}
+
+// validate checks one profile entry; seen tracks names already accepted.
+func (p ManifestProfile) validate(i int, wantExt string, seen map[string]struct{}) error {
+	if err := shell.ValidateName(p.Name); err != nil {
+		return fmt.Errorf("manifest profiles[%d]: %w", i, err)
+	}
+	if _, dup := seen[p.Name]; dup {
+		return fmt.Errorf("manifest profiles[%d]: duplicate name %q", i, p.Name)
+	}
+	seen[p.Name] = struct{}{}
+	want := ProfilesDir + p.Name + wantExt
+	if p.File != want {
+		return fmt.Errorf("manifest profiles[%d]: file %q does not match expected %q", i, p.File, want)
 	}
 	return nil
 }
