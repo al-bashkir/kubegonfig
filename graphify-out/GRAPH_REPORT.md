@@ -1,16 +1,16 @@
-# Graph Report - kubegonfig  (2026-09-23)
+# Graph Report - kubegonfig  (2026-11-07)
 
 ## Corpus Check
-- 48 files · ~29,162 words
+- 53 files · ~35,145 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 599 nodes · 1588 edges · 31 communities (27 shown, 4 thin omitted)
-- Extraction: 74% EXTRACTED · 26% INFERRED · 0% AMBIGUOUS · INFERRED: 409 edges (avg confidence: 0.8)
+- 716 nodes · 1981 edges · 34 communities (30 shown, 4 thin omitted)
+- Extraction: 75% EXTRACTED · 25% INFERRED · 0% AMBIGUOUS · INFERRED: 498 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `404db2a6`
+- Built from commit: `b20e5952`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -38,18 +38,21 @@
 - [[_COMMUNITY_Community 21|Community 21]]
 - [[_COMMUNITY_Community 26|Community 26]]
 - [[_COMMUNITY_Community 27|Community 27]]
+- [[_COMMUNITY_Community 31|Community 31]]
+- [[_COMMUNITY_Community 32|Community 32]]
+- [[_COMMUNITY_Community 33|Community 33]]
 
 ## God Nodes (most connected - your core abstractions)
-1. `T` - 54 edges
-2. `newTestManager()` - 42 edges
+1. `newTestManager()` - 57 edges
+2. `T` - 54 edges
 3. `T` - 37 edges
-4. `T` - 31 edges
-5. `Export()` - 30 edges
-6. `Restore()` - 25 edges
-7. `writeProfile()` - 25 edges
-8. `Manager` - 24 edges
-9. `ValidateName()` - 23 edges
-10. `T` - 20 edges
+4. `Export()` - 34 edges
+5. `Restore()` - 34 edges
+6. `T` - 31 edges
+7. `writeProfile()` - 29 edges
+8. `Manager` - 26 edges
+9. `newSeededManager()` - 24 edges
+10. `ValidateName()` - 24 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `completeProfileNames()` --calls--> `Load()`  [INFERRED]
@@ -66,43 +69,43 @@
 ## Import Cycles
 - None detected.
 
-## Communities (31 total, 4 thin omitted)
+## Communities (34 total, 4 thin omitted)
 
 ### Community 0 - "Community 0"
-Cohesion: 0.12
-Nodes (42): runUnlock(), TestGPGPathReresolvesMissingCachedBinary(), setCachedGPGForTest(), File, Time, T, FileLock, NewFileLock() (+34 more)
+Cohesion: 0.13
+Nodes (40): runUnlock(), TestGPGPathReresolvesMissingCachedBinary(), setCachedGPGForTest(), File, Time, T, FileLock, RuntimeDir() (+32 more)
 
 ### Community 1 - "Community 1"
-Cohesion: 0.23
+Cohesion: 0.22
 Nodes (6): Config, Time, Manager, profileFileName(), ValidateName(), IsPostCommitError()
 
 ### Community 2 - "Community 2"
-Cohesion: 0.08
-Nodes (62): installFakeGPGForBundle(), keysOf(), newSeededManager(), readTarEntries(), TestExport_DecryptEmitsPlaintextValidatedKubeconfig(), TestExport_DecryptRejectsInvalidPlaintext(), TestExport_EncryptedPassThrough(), TestExport_EntriesSortedByName() (+54 more)
+Cohesion: 0.09
+Nodes (58): budgetWriter, installFakeGPGForBundle(), keysOf(), newSeededManager(), readTarEntries(), TestExport_DecryptEmitsPlaintextValidatedKubeconfig(), TestExport_DecryptRejectsInvalidPlaintext(), TestExport_EncryptedPassThrough() (+50 more)
 
 ### Community 3 - "Community 3"
-Cohesion: 0.13
-Nodes (63): Manager, T, Time, assertFileContent(), assertStillBlocked(), currentPathForTest(), installBlockingGPG(), installFakeGPG() (+55 more)
+Cohesion: 0.10
+Nodes (81): Manager, T, Manager, T, Time, readStoredForTest(), TestActivateDecryptsAndRecordsCurrent(), TestActivateErrors() (+73 more)
 
 ### Community 4 - "Community 4"
 Cohesion: 0.21
 Nodes (24): T, TestListRejectsInvalidCurrentState(), T, TestValidate_ClusterMissingName(), TestValidate_ClusterMissingServer(), TestValidate_ContextMissingCluster(), TestValidate_ContextMissingUser(), TestValidate_ContextUnknownCluster() (+16 more)
 
 ### Community 5 - "Community 5"
-Cohesion: 0.18
-Nodes (19): selectGPGKey(), Decrypt(), Encrypt(), gpgPath(), isSafeGPGDiagnostic(), ListSecretKeys(), looksSensitiveGPGLine(), LookupGPG() (+11 more)
+Cohesion: 0.16
+Nodes (30): Decrypt(), Encrypt(), gpgPath(), isSafeGPGDiagnostic(), ListSecretKeys(), looksSensitiveGPGLine(), LookupGPG(), normalizeRecipients() (+22 more)
 
 ### Community 6 - "Community 6"
 Cohesion: 0.16
 Nodes (23): completeExecProfileName(), completeProfileNames(), completeRenameOldProfile(), Command, T, setupCompletionProfiles(), TestCompleteProfileNames(), TestCompleteProfileNamesFiltersPrefix() (+15 more)
 
 ### Community 7 - "Community 7"
-Cohesion: 0.18
-Nodes (19): T, TestInitRecipientFlag(), Config, Load(), normalizeDataDir(), TestLoad_ExistingConfig(), TestLoad_InvalidYAML(), TestLoad_NonexistentReturnsDefault() (+11 more)
+Cohesion: 0.22
+Nodes (18): Config, Load(), normalizeDataDir(), TestLoad_ExistingConfig(), TestLoad_InvalidYAML(), TestLoad_NonexistentReturnsDefault(), TestLoadRejectsInvalidDataDir(), TestLoadRejectsInvalidShellStyle() (+10 more)
 
 ### Community 8 - "Community 8"
 Cohesion: 0.10
-Nodes (21): guardPlaintextDestination(), init(), runExport(), startsWithDotDot(), init(), runRestore(), Execute(), Command (+13 more)
+Nodes (23): exportNames(), Writer, guardPlaintextDestination(), init(), runExport(), startsWithDotDot(), init(), runRestore() (+15 more)
 
 ### Community 9 - "Community 9"
 Cohesion: 0.07
@@ -133,36 +136,48 @@ Cohesion: 0.47
 Nodes (12): T, joinShellArgs(), shellQuote(), TestBashWrapperAddsDefaultPosixShellStyle(), TestBashWrapperHelpPassesThroughWithoutEval(), TestFishWrapperAddsDefaultFishShellStyle(), TestFishWrapperHelpPassesThroughWithoutEval(), testWrapperAddsDefaultPosixShellStyle() (+4 more)
 
 ### Community 17 - "Community 17"
-Cohesion: 0.08
-Nodes (69): DirEntry, FileMode, File, Time, Writer, T, FileExistsInDir(), AtomicWriteInDir() (+61 more)
+Cohesion: 0.06
+Nodes (84): DirEntry, FileMode, T, File, Time, Writer, T, TestEnsureDirRejectsRegularFile() (+76 more)
 
 ### Community 18 - "Community 18"
 Cohesion: 0.31
 Nodes (9): Edit(), ResolveEditor(), splitCommandLine(), TestEditWritesTempUnderRuntimeDir(), TestResolveEditorPrefersVisual(), TestResolveEditorUsesEditorWhenVisualUnset(), TestSplitCommandLine(), TestSplitCommandLineRejectsUnterminatedQuote() (+1 more)
 
 ### Community 21 - "Community 21"
-Cohesion: 0.15
-Nodes (11): clusterData, clusterEntry, contextData, contextEntry, clusterData, clusterEntry, contextData, contextEntry (+3 more)
+Cohesion: 0.18
+Nodes (18): clusterData, clusterEntry, contextData, contextEntry, clusterData, clusterEntry, contextData, contextEntry (+10 more)
+
+### Community 31 - "Community 31"
+Cohesion: 0.18
+Nodes (28): applyRestore(), mergeArchivedConfig(), newRestorer(), planRestore(), prepareProfileBlob(), readManifest(), Restore(), buildEncryptedArchive() (+20 more)
+
+### Community 32 - "Community 32"
+Cohesion: 0.31
+Nodes (21): cmdTestEnv(), cmdTestExists(), cmdTestResetFlags(), cmdTestRun(), cmdTestTarNames(), Command, T, TestDeleteForceSkipsPrompt() (+13 more)
+
+### Community 33 - "Community 33"
+Cohesion: 0.25
+Nodes (11): Reader, Writer, keyMenu(), selectGPGKey(), T, initTestFakeGPG(), TestInitRecipientFlag(), TestSelectGPGKey() (+3 more)
 
 ## Knowledge Gaps
-- **86 isolated node(s):** `Cmd`, `File`, `T`, `T`, `Command` (+81 more)
+- **86 isolated node(s):** `Command`, `Cmd`, `File`, `Writer`, `Reader` (+81 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **4 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `ValidateName()` connect `Community 1` to `Community 0`, `Community 2`, `Community 3`, `Community 8`, `Community 11`?**
-  _High betweenness centrality (0.099) - this node is a cross-community bridge._
-- **Why does `NewManager()` connect `Community 2` to `Community 1`, `Community 3`, `Community 4`, `Community 6`, `Community 7`, `Community 12`?**
-  _High betweenness centrality (0.094) - this node is a cross-community bridge._
-- **Why does `Export()` connect `Community 2` to `Community 8`, `Community 1`, `Community 12`, `Community 17`?**
-  _High betweenness centrality (0.070) - this node is a cross-community bridge._
-- **Are the 22 inferred relationships involving `Export()` (e.g. with `TestExport_DecryptEmitsPlaintextValidatedKubeconfig()` and `TestExport_DecryptRejectsInvalidPlaintext()`) actually correct?**
-  _`Export()` has 22 INFERRED edges - model-reasoned connections that need verification._
-- **What connects `Cmd`, `File`, `T` to the rest of the system?**
+- **Why does `NewManager()` connect `Community 2` to `Community 1`, `Community 3`, `Community 4`, `Community 6`, `Community 7`, `Community 12`, `Community 31`?**
+  _High betweenness centrality (0.100) - this node is a cross-community bridge._
+- **Why does `ValidateName()` connect `Community 1` to `Community 8`, `Community 0`, `Community 2`, `Community 11`?**
+  _High betweenness centrality (0.091) - this node is a cross-community bridge._
+- **Why does `RuntimeDir()` connect `Community 0` to `Community 3`, `Community 10`, `Community 17`, `Community 18`, `Community 31`?**
+  _High betweenness centrality (0.091) - this node is a cross-community bridge._
+- **Are the 16 inferred relationships involving `newTestManager()` (e.g. with `TestActivateDecryptsAndRecordsCurrent()` and `TestActivateErrors()`) actually correct?**
+  _`newTestManager()` has 16 INFERRED edges - model-reasoned connections that need verification._
+- **Are the 24 inferred relationships involving `Export()` (e.g. with `TestExport_DecryptEmitsPlaintextValidatedKubeconfig()` and `TestExport_DecryptRejectsInvalidPlaintext()`) actually correct?**
+  _`Export()` has 24 INFERRED edges - model-reasoned connections that need verification._
+- **Are the 23 inferred relationships involving `Restore()` (e.g. with `TestRestore_CollisionWithoutFlagsFails()` and `TestRestore_DryRunDoesNotWrite()`) actually correct?**
+  _`Restore()` has 23 INFERRED edges - model-reasoned connections that need verification._
+- **What connects `Command`, `Cmd`, `File` to the rest of the system?**
   _86 weakly-connected nodes found - possible documentation gaps or missing edges._
-- **Should `Community 0` be split into smaller, more focused modules?**
-  _Cohesion score 0.12077294685990338 - nodes in this community are weakly interconnected._
-- **Should `Community 2` be split into smaller, more focused modules?**
-  _Cohesion score 0.08482523444160273 - nodes in this community are weakly interconnected._
