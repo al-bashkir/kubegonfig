@@ -74,7 +74,12 @@ func Remove(name string) error {
 	return storage.RemoveFileInDir(storage.RuntimeDir(), name+".yaml")
 }
 
-// CleanupStale removes stale kubegonfig kubeconfig temp files from the runtime directory.
+// EditDirPrefix names the per-edit directories that hold decrypted plaintext
+// while an editor runs; a killed edit can leave one behind.
+const EditDirPrefix = "kubegonfig-edit-"
+
+// CleanupStale removes stale kubegonfig kubeconfig temp files and leftover
+// edit directories from the runtime directory.
 // Used by the explicit "cleanup" command.
 func CleanupStale() (int, error) {
 	dir := storage.RuntimeDir()
@@ -87,10 +92,16 @@ func CleanupStale() (int, error) {
 	for _, e := range entries {
 		// ponytail: trust readdir d_type like profile.List; misses files on
 		// DT_UNKNOWN filesystems (some FUSE).
-		if !isKubeconfigTempName(e.Name()) || !e.Type().IsRegular() {
+		var err error
+		switch {
+		case isKubeconfigTempName(e.Name()) && e.Type().IsRegular():
+			err = storage.RemoveFileInDir(dir, e.Name())
+		case strings.HasPrefix(e.Name(), EditDirPrefix) && e.IsDir():
+			err = storage.RemoveFlatDirInDir(dir, e.Name())
+		default:
 			continue
 		}
-		if err := storage.RemoveFileInDir(dir, e.Name()); err != nil {
+		if err != nil {
 			return count, fmt.Errorf("remove %s: %w", filepath.Join(dir, e.Name()), err)
 		}
 		count++

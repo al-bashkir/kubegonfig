@@ -727,6 +727,7 @@ func TestExport_LockSerializesWithDelete(t *testing.T) {
 }
 
 func TestRestore_MergeConfigUnionsRecipients(t *testing.T) {
+	installFakeGPGForBundle(t)
 	srcCfg := &config.Config{DataDir: t.TempDir(), GPGRecipient: "src@example.com"}
 	srcCfg.GPGRecipients = []string{"shared@example.com"}
 	srcCfg.Path = filepath.Join(t.TempDir(), "config.yaml")

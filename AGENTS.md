@@ -100,7 +100,8 @@ and uses shell output so callers can opt in to environment changes.
 - `use` activation files may remain in the runtime directory so the
   caller's shell can keep using them; `cleanup` is responsible for stale files.
 - Runtime cleanup must only remove valid profile-name-shaped `*.yaml` activation
-  files from the app runtime directory.
+  files and leftover `kubegonfig-edit-*` edit directories from the app runtime
+  directory.
 - Profile names must be validated before filesystem use, shell output, or active
   state reporting.
 - GPG recipients must be non-blank after trimming and deduplicated before GPG is

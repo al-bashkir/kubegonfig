@@ -165,7 +165,7 @@ func TestEncryptPassesRecipientsAndStdin(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Encrypt() error = %v", err)
 	}
-	want := "--batch --yes --encrypt --armor --trust-model always --recipient a@x --recipient B2\nplain"
+	want := "--batch --yes --encrypt --armor --trust-model always --no-auto-key-locate --recipient a@x --recipient B2\nplain"
 	if string(out) != want {
 		t.Errorf("Encrypt() = %q, want %q", out, want)
 	}
@@ -262,5 +262,29 @@ func TestLookupGPGResolvesFromPath(t *testing.T) {
 	}
 	if got != path {
 		t.Fatalf("LookupGPG() = %q, want %q", got, path)
+	}
+}
+
+func TestCheckRecipientAsksOnlyTheLocalKeyring(t *testing.T) {
+	writeFakeGPG(t, `[ "$*" = "--batch --no-auto-key-locate --list-keys -- a@x" ] && exit 0
+echo "gpg: error reading key: No public key" >&2
+exit 2`)
+	if err := CheckRecipient("a@x"); err != nil {
+		t.Fatalf("CheckRecipient(a@x) error = %v, want nil", err)
+	}
+	err := CheckRecipient("-b@x")
+	if err == nil || !strings.Contains(err.Error(), "No public key") {
+		t.Fatalf("CheckRecipient(-b@x) error = %v, want No public key failure", err)
+	}
+}
+
+func TestEncryptDisablesAutoKeyLocate(t *testing.T) {
+	writeFakeGPG(t, `echo "$@"`)
+	out, err := Encrypt([]byte("plain"), []string{"a@x"})
+	if err != nil {
+		t.Fatalf("Encrypt() error = %v", err)
+	}
+	if !strings.Contains(string(out), "--no-auto-key-locate") {
+		t.Errorf("Encrypt() args = %q, want --no-auto-key-locate so a recipient is never fetched over the network", out)
 	}
 }

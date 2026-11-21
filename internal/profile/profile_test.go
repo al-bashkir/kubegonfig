@@ -886,3 +886,37 @@ func waitForFile(t *testing.T, path string, done <-chan error, op string) {
 		}
 	}
 }
+
+func TestDeleteRemovesActivationFile(t *testing.T) {
+	m := newTestManager(t)
+	writePlaintextProfile(t, m, "prod")
+	path := writeRuntimeFileForTest(t, "prod", "activated", time.Now())
+
+	if err := m.Delete("prod"); err != nil {
+		t.Fatalf("Delete() error: %v", err)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Errorf("activation file of the deleted profile still exists (stat err = %v)", err)
+	}
+}
+
+func TestRenameOntoNameWithStaleActivationFileActivatesRenamedProfile(t *testing.T) {
+	installFakeGPG(t)
+	m := newTestManager(t)
+	writePlaintextProfile(t, m, "dev")
+	old := time.Now().Add(-time.Hour)
+	if err := os.Chtimes(profilePathForTest(m, "dev"), old, old); err != nil {
+		t.Fatalf("chtimes: %v", err)
+	}
+	// Left over from a deleted profile that used the target name earlier.
+	writeRuntimeFileForTest(t, "prod", "stale-from-deleted-prod", time.Now())
+
+	if err := m.Rename("dev", "prod"); err != nil {
+		t.Fatalf("Rename() error: %v", err)
+	}
+	path, err := m.Activate("prod")
+	if err != nil {
+		t.Fatalf("Activate() error: %v", err)
+	}
+	assertFileContent(t, path, string(validKubeconfig()))
+}

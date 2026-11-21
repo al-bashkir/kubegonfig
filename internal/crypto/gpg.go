@@ -43,11 +43,21 @@ func Encrypt(data []byte, recipients []string) ([]byte, error) {
 		"--encrypt",
 		"--armor",
 		"--trust-model", "always",
+		// Never fetch a recipient key over WKD/keyservers; trust-model always
+		// would accept it without any validity check.
+		"--no-auto-key-locate",
 	}
 	for _, r := range recipients {
 		args = append(args, "--recipient", r)
 	}
 	return runGPG("encrypt", data, args...)
+}
+
+// CheckRecipient returns an error unless spec resolves to a public key that is
+// already in the local keyring. It never contacts key servers or WKD.
+func CheckRecipient(spec string) error {
+	_, err := runGPG("list-keys", nil, "--batch", "--no-auto-key-locate", "--list-keys", "--", spec)
+	return err
 }
 
 // Decrypt decrypts GPG-encrypted data. Relies on gpg-agent for passphrase.

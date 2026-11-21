@@ -100,6 +100,57 @@ func RemoveFileInDir(dirPath, name string) error {
 	return syncDir(dir, dirPath)
 }
 
+// RemoveFlatDirInDir removes the directory name, which holds only plain
+// files, relative to a verified non-symlink directory. A symlink named name is
+// not followed. A missing directory is not an error.
+func RemoveFlatDirInDir(dirPath, name string) error {
+	if err := validateRelativeFileName(name); err != nil {
+		return err
+	}
+	parent, err := openVerifiedDir(dirPath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+	defer func() { _ = parent.Close() }()
+
+	missing, err := removeChildEntries(parent, filepath.Join(dirPath, name), name)
+	if err != nil || missing {
+		return err
+	}
+	if err := unix.Unlinkat(int(parent.Fd()), name, unix.AT_REMOVEDIR); err != nil {
+		return fmt.Errorf("remove %s: %w", filepath.Join(dirPath, name), err)
+	}
+	return syncDir(parent, dirPath)
+}
+
+// removeChildEntries unlinks every plain file in the directory name under
+// parent, opened without following a symlink. missing reports that name does
+// not exist.
+func removeChildEntries(parent *os.File, path, name string) (missing bool, err error) {
+	fd, err := unix.Openat(int(parent.Fd()), name, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return true, nil
+		}
+		return false, fmt.Errorf("open %s: %w", path, err)
+	}
+	child := os.NewFile(uintptr(fd), name)
+	defer func() { _ = child.Close() }()
+	entries, err := child.ReadDir(-1)
+	if err != nil {
+		return false, fmt.Errorf("read %s: %w", path, err)
+	}
+	for _, e := range entries {
+		if err := unix.Unlinkat(int(child.Fd()), e.Name(), 0); err != nil {
+			return false, fmt.Errorf("remove %s: %w", filepath.Join(path, e.Name()), err)
+		}
+	}
+	return false, nil
+}
+
 // RenameFileInDir renames a file relative to a verified non-symlink directory.
 func RenameFileInDir(dirPath, oldName, newName string) error {
 	if err := validateRelativeFileName(oldName); err != nil {

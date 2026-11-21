@@ -667,3 +667,57 @@ func TestRegularFileMtimeInDirRejectsInvalidName(t *testing.T) {
 		t.Fatal("RegularFileMtimeInDir() error = nil, want validation error")
 	}
 }
+
+func TestRemoveFlatDirInDir(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, "flat"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "flat", "f"), []byte("x"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := RemoveFlatDirInDir(root, "flat"); err != nil {
+		t.Fatalf("RemoveFlatDirInDir(flat) error = %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "flat")); !os.IsNotExist(err) {
+		t.Errorf("flat dir still exists (stat err = %v)", err)
+	}
+	if err := RemoveFlatDirInDir(root, "missing"); err != nil {
+		t.Errorf("RemoveFlatDirInDir(missing) error = %v, want nil", err)
+	}
+
+	if err := os.MkdirAll(filepath.Join(root, "nested", "sub"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := RemoveFlatDirInDir(root, "nested"); err == nil {
+		t.Error("RemoveFlatDirInDir(nested) error = nil, want failure for a subdirectory")
+	}
+}
+
+func TestRemoveFlatDirInDirRefusesNonDirectoryAndSymlink(t *testing.T) {
+	root := t.TempDir()
+	outside := t.TempDir()
+	if err := os.WriteFile(filepath.Join(outside, "keep"), []byte("x"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "file"), []byte("x"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(root, "link")); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	for _, name := range []string{"file", "link"} {
+		if err := RemoveFlatDirInDir(root, name); err == nil {
+			t.Errorf("RemoveFlatDirInDir(%s) error = nil, want refusal", name)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(outside, "keep")); err != nil {
+		t.Errorf("symlink target was touched: %v", err)
+	}
+	if err := RemoveFlatDirInDir(filepath.Join(root, "no-such-dir"), "x"); err != nil {
+		t.Errorf("RemoveFlatDirInDir(missing parent) error = %v, want nil", err)
+	}
+	if err := RemoveFlatDirInDir(root, "a/b"); err == nil {
+		t.Error("RemoveFlatDirInDir(a/b) error = nil, want invalid name")
+	}
+}

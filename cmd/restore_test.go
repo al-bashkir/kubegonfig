@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"kubegonfig/internal/bundle"
@@ -81,5 +82,73 @@ func TestRestoreCmd_RoundTripFromFile(t *testing.T) {
 	}
 	if string(got) != "alpha-cipher" {
 		t.Errorf("restored body = %q, want %q", got, "alpha-cipher")
+	}
+}
+
+func TestRestoreCmd_MergeConfigNamesAddedRecipients(t *testing.T) {
+	cmdTestEnv(t)
+	srcCfg := &config.Config{DataDir: t.TempDir(), GPGRecipient: "src@example.com", GPGRecipients: []string{"shared@example.com"}}
+	srcCfg.Path = filepath.Join(t.TempDir(), "config.yaml")
+	_ = srcCfg.Save()
+	srcMgr, _ := profile.NewManager(srcCfg)
+	if err := srcMgr.WriteEncrypted("alpha", []byte("alpha-cipher")); err != nil {
+		t.Fatalf("seed src: %v", err)
+	}
+	var buf bytes.Buffer
+	if err := bundle.Export(srcMgr, srcCfg, bundle.ExportOptions{
+		Names: []string{"alpha"}, IncludeConfig: true, KubegonfigVersion: "test", Out: &buf,
+	}); err != nil {
+		t.Fatalf("Export(): %v", err)
+	}
+	archivePath := filepath.Join(t.TempDir(), "in.tar")
+	if err := os.WriteFile(archivePath, buf.Bytes(), 0600); err != nil {
+		t.Fatalf("write archive: %v", err)
+	}
+
+	_, stderr, err := cmdTestRun(t, "", "restore", "--merge-config", archivePath)
+	if err != nil {
+		t.Fatalf("restore error: %v", err)
+	}
+	if !strings.Contains(stderr, "added recipient shared@example.com") {
+		t.Errorf("stderr = %q, want the added recipient named", stderr)
+	}
+}
+
+func TestRestoreCmd_MergeConfigNamesAddedRecipientsEvenWhenAnotherFails(t *testing.T) {
+	cmdTestEnv(t)
+	// Resolves good@ but not unknown@; placed before the pass-through gpg.
+	gpgDir := t.TempDir()
+	script := "#!/bin/sh\ncase \"$*\" in *--list-keys*unknown@*) echo 'gpg: No public key' >&2; exit 2;; esac\ncat\n"
+	for _, n := range []string{"gpg2", "gpg"} {
+		if err := os.WriteFile(filepath.Join(gpgDir, n), []byte(script), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("PATH", gpgDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	srcCfg := &config.Config{DataDir: t.TempDir(), GPGRecipient: "src@example.com", GPGRecipients: []string{"unknown@example.com", "good@example.com"}}
+	srcCfg.Path = filepath.Join(t.TempDir(), "config.yaml")
+	_ = srcCfg.Save()
+	srcMgr, _ := profile.NewManager(srcCfg)
+	if err := srcMgr.WriteEncrypted("alpha", []byte("alpha-cipher")); err != nil {
+		t.Fatalf("seed src: %v", err)
+	}
+	var buf bytes.Buffer
+	if err := bundle.Export(srcMgr, srcCfg, bundle.ExportOptions{
+		Names: []string{"alpha"}, IncludeConfig: true, KubegonfigVersion: "test", Out: &buf,
+	}); err != nil {
+		t.Fatalf("Export(): %v", err)
+	}
+	archivePath := filepath.Join(t.TempDir(), "in.tar")
+	if err := os.WriteFile(archivePath, buf.Bytes(), 0600); err != nil {
+		t.Fatalf("write archive: %v", err)
+	}
+
+	_, stderr, err := cmdTestRun(t, "", "restore", "--merge-config", archivePath)
+	if err == nil {
+		t.Fatal("restore error = nil, want the unmerged recipient reported")
+	}
+	if !strings.Contains(stderr, "added recipient good@example.com") {
+		t.Errorf("stderr = %q, want the recipient that was added to the config named", stderr)
 	}
 }

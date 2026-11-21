@@ -32,6 +32,12 @@ local copies.
 Plaintext archives are re-encrypted with the LOCAL GPG recipients before
 being stored. The archive's recipient list is never used for re-encryption.
 
+--merge-config adds the archive's extra GPG recipients to your config, so
+they can read every profile you write afterwards. The archive is not
+authenticated: only recipients whose public key is already in your keyring
+are added, each one is printed, and the merge runs after all profiles are
+written.
+
 Restore is additive and re-runnable: a per-profile failure does not roll
 back profiles already written. Use --dry-run to validate the archive and
 preview the plan without writing.`,
@@ -61,6 +67,11 @@ func runRestore(archive string) error {
 		MergeConfig:  restoreMergeConfig,
 		DryRun:       restoreDryRun,
 	})
+	// The config may already hold merged recipients even when another step
+	// failed, so name them before reporting the error.
+	for _, r := range plan.AddedRecipients {
+		info("config: added recipient %s", r)
+	}
 	if err != nil {
 		return err
 	}
@@ -77,6 +88,6 @@ func runRestore(archive string) error {
 func init() {
 	restoreCmd.Flags().BoolVar(&restoreForce, "force", false, "overwrite profiles whose names already exist locally")
 	restoreCmd.Flags().BoolVar(&restoreSkipExisting, "skip-existing", false, "keep local copies; restore only new names")
-	restoreCmd.Flags().BoolVar(&restoreMergeConfig, "merge-config", false, "union archived config recipients into the local config")
+	restoreCmd.Flags().BoolVar(&restoreMergeConfig, "merge-config", false, "add archived config recipients that already have a key in your keyring (they can then read future profiles)")
 	restoreCmd.Flags().BoolVar(&restoreDryRun, "dry-run", false, "parse and validate the archive, print the plan, and exit")
 }

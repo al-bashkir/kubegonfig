@@ -9,10 +9,13 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"kubegonfig/internal/storage"
+	"kubegonfig/internal/tmpfile"
 )
 
 // fallbackEditors is the ordered list of editors to try when no editor is configured.
@@ -35,6 +38,35 @@ func ResolveEditor() (string, error) {
 	return "", fmt.Errorf("no editor found: set $VISUAL or $EDITOR, or install vim/nvim/nano")
 }
 
+// runUntilDone runs cmd and waits for it. A signal received meanwhile is
+// forwarded to the editor, and the edit is abandoned once the editor exits.
+// ponytail: waits as long as the editor ignores the forwarded signal; SIGKILL
+// the editor to end it.
+func runUntilDone(cmd *exec.Cmd, sigs <-chan os.Signal) error {
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("start editor: %w", err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+
+	var got os.Signal
+	for {
+		select {
+		case s := <-sigs:
+			got = s
+			_ = cmd.Process.Signal(s)
+		case err := <-done:
+			if got != nil {
+				return fmt.Errorf("edit interrupted (%v); changes discarded", got)
+			}
+			if err != nil {
+				return fmt.Errorf("editor exited with error: %w", err)
+			}
+			return nil
+		}
+	}
+}
+
 // Edit opens the user's editor with initialContent pre-filled in a secure
 // temp file. Returns the file content after the editor exits.
 // The temp file is created with 0600 permissions and cleaned up afterward.
@@ -50,7 +82,13 @@ func Edit(initialContent []byte) ([]byte, error) {
 	if err := storage.EnsureDir(runtimeDir, 0700); err != nil {
 		return nil, fmt.Errorf("create runtime dir: %w", err)
 	}
-	tmpDir, err := os.MkdirTemp(runtimeDir, "kubegonfig-edit-*")
+	// Catch termination signals from here on: a default-handled signal would
+	// skip the deferred RemoveAll below and leave the plaintext behind.
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
+	defer signal.Stop(sigs)
+
+	tmpDir, err := os.MkdirTemp(runtimeDir, tmpfile.EditDirPrefix+"*")
 	if err != nil {
 		return nil, fmt.Errorf("create temp dir: %w", err)
 	}
@@ -76,8 +114,8 @@ func Edit(initialContent []byte) ([]byte, error) {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("editor exited with error: %w", err)
+	if err := runUntilDone(cmd, sigs); err != nil {
+		return nil, err
 	}
 
 	content, err := os.ReadFile(tmpFile)

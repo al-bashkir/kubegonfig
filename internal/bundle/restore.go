@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"slices"
 	"sort"
 	"strings"
@@ -37,6 +36,8 @@ type RestorePlan struct {
 	ToOverwrite  []string
 	ToSkip       []string
 	ConfigAction string // "ignore" | "merge"
+	// AddedRecipients lists the archived recipients merged into the local config.
+	AddedRecipients []string
 }
 
 // Restore reads a tar archive from opts.In and applies it to mgr/cfg.
@@ -46,18 +47,12 @@ func Restore(mgr *profile.Manager, cfg *config.Config, opts RestoreOptions) (Res
 		return plan, fmt.Errorf("--force and --skip-existing are mutually exclusive")
 	}
 
-	runtimeDir := storage.RuntimeDir()
-	if err := storage.EnsureDir(runtimeDir, 0700); err != nil {
-		return plan, fmt.Errorf("create runtime dir: %w", err)
-	}
-	tmp, err := os.CreateTemp(runtimeDir, "kubegonfig-restore-*")
+	// Unlinked at creation: a killed process leaves no named archive copy.
+	tmp, err := storage.OpenUnlinkedTempFileInDir(storage.RuntimeDir(), "kubegonfig-restore-", "", nil, 0600)
 	if err != nil {
 		return plan, fmt.Errorf("create restore tempfile: %w", err)
 	}
-	defer func() {
-		_ = tmp.Close()
-		_ = os.Remove(tmp.Name())
-	}()
+	defer func() { _ = tmp.Close() }()
 	if _, err := io.Copy(tmp, opts.In); err != nil {
 		return plan, fmt.Errorf("buffer archive: %w", err)
 	}
@@ -73,7 +68,7 @@ func Restore(mgr *profile.Manager, cfg *config.Config, opts RestoreOptions) (Res
 		if err != nil || opts.DryRun {
 			return err
 		}
-		return applyRestore(mgr, cfg, tmp, manifest, plan)
+		return applyRestore(mgr, cfg, tmp, manifest, &plan)
 	})
 	return plan, err
 }
@@ -126,10 +121,14 @@ type restorer struct {
 	skip     map[string]struct{} // profile names to keep local
 	// writeErrs collects per-entry failures so one bad entry does not stop the rest.
 	writeErrs []error
+	// configBody is the archived config.yaml, merged only after every profile
+	// entry is written so it cannot affect re-encryption in the same run.
+	configBody []byte
 }
 
 // applyRestore replays the buffered archive (past the manifest) into mgr/cfg.
-func applyRestore(mgr *profile.Manager, cfg *config.Config, tmp io.ReadSeeker, manifest *Manifest, plan RestorePlan) error {
+// It records the merged recipients in plan.AddedRecipients.
+func applyRestore(mgr *profile.Manager, cfg *config.Config, tmp io.ReadSeeker, manifest *Manifest, plan *RestorePlan) error {
 	if _, err := tmp.Seek(0, io.SeekStart); err != nil {
 		return fmt.Errorf("rewind archive for apply: %w", err)
 	}
@@ -138,7 +137,7 @@ func applyRestore(mgr *profile.Manager, cfg *config.Config, tmp io.ReadSeeker, m
 		return fmt.Errorf("re-read manifest entry: %w", err)
 	}
 
-	r := newRestorer(mgr, cfg, manifest, plan)
+	r := newRestorer(mgr, cfg, manifest, *plan)
 	for {
 		hdr, err := tr.Next()
 		if err == io.EOF {
@@ -149,6 +148,13 @@ func applyRestore(mgr *profile.Manager, cfg *config.Config, tmp io.ReadSeeker, m
 		}
 		if err := r.entry(tr, hdr); err != nil {
 			return err
+		}
+	}
+	if r.configBody != nil {
+		added, err := mergeArchivedConfig(cfg, r.configBody)
+		plan.AddedRecipients = added
+		if err != nil {
+			r.writeErrs = append(r.writeErrs, fmt.Errorf("merge config: %w", err))
 		}
 	}
 	return errors.Join(r.writeErrs...)
@@ -203,9 +209,7 @@ func (r *restorer) configEntry(tr *tar.Reader, hdr *tar.Header) error {
 	if int64(len(body)) > int64(MaxProfileSize) {
 		return fmt.Errorf("archive entry %q exceeds %d byte limit", hdr.Name, MaxProfileSize)
 	}
-	if err := mergeArchivedConfig(r.cfg, body); err != nil {
-		r.writeErrs = append(r.writeErrs, fmt.Errorf("merge config: %w", err))
-	}
+	r.configBody = body
 	return nil
 }
 
@@ -284,18 +288,32 @@ func prepareProfileBlob(cfg *config.Config, encrypted bool, body []byte) ([]byte
 
 // mergeArchivedConfig unions gpg_recipients from the archived config into the
 // local config. gpg_recipient (primary), data_dir, and shell_style are never
-// overwritten.
-func mergeArchivedConfig(local *config.Config, archivedBody []byte) error {
+// overwritten. The archive is unauthenticated, so a recipient is merged only
+// when it already resolves to a key in the local keyring; the rest are
+// reported in the returned error. It returns the recipients it added.
+func mergeArchivedConfig(local *config.Config, archivedBody []byte) ([]string, error) {
 	var archived struct {
 		GPGRecipients []string `yaml:"gpg_recipients"`
 	}
 	if err := yaml.Unmarshal(archivedBody, &archived); err != nil {
-		return fmt.Errorf("parse archived config: %w", err)
+		return nil, fmt.Errorf("parse archived config: %w", err)
 	}
+	var added []string
+	var errs []error
 	for _, r := range archived.GPGRecipients {
-		if r = strings.TrimSpace(r); r != "" && !slices.Contains(local.GPGRecipients, r) {
-			local.GPGRecipients = append(local.GPGRecipients, r)
+		r = strings.TrimSpace(r)
+		if r == "" || slices.Contains(local.GPGRecipients, r) {
+			continue
 		}
+		if err := crypto.CheckRecipient(r); err != nil {
+			errs = append(errs, fmt.Errorf("recipient %q not merged (import its public key first): %w", r, err))
+			continue
+		}
+		local.GPGRecipients = append(local.GPGRecipients, r)
+		added = append(added, r)
 	}
-	return local.Save()
+	if len(added) > 0 {
+		errs = append(errs, local.Save())
+	}
+	return added, errors.Join(errs...)
 }

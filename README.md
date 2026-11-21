@@ -93,7 +93,7 @@ kubegonfig use my-cluster --shell fish | source
 | `delete <name>` (`rm`) | Delete a profile (`--force` to skip prompt) |
 | `unlock <name>...` | Decrypt one or more profiles to the runtime dir without activating any |
 | `export [name...] -o <file>` | Write a tar archive of selected (or `--all`) profiles. `--decrypt` for plaintext (refused into a TTY or the data directory); `--profiles-only` to skip `config.yaml` |
-| `restore <archive>` | Restore profiles from an archive. `--force` overwrites; `--skip-existing` keeps local; `--merge-config` unions recipients; `--dry-run` previews |
+| `restore <archive>` | Restore profiles from an archive. `--force` overwrites; `--skip-existing` keeps local; `--merge-config` adds archive recipients whose key is already in your keyring (each is printed); `--dry-run` previews |
 | `cleanup` | Remove stale temp files from runtime dir |
 
 Global options include `--quiet` (`-q`) to suppress informational stderr messages and the standard Cobra `--help`/`--version` output.
@@ -139,6 +139,8 @@ kubegonfig export production --decrypt -o /var/cache/builds/prod.tar
 
 Plaintext export is refused when stdout is a terminal or when the destination resolves inside the kubegonfig data directory.
 
+`--merge-config` lets the archive add GPG recipients who can then read every profile you write afterwards. Archives are not authenticated, so use it only with archives you trust. Only recipients whose key is already in your keyring are added, each one is printed, and the merge runs after all profiles are written.
+
 Restore is additive: per-profile failures do not roll back profiles that were already written. Use `--dry-run` to validate an archive and preview the plan without writing.
 
 ## Configuration
@@ -169,7 +171,10 @@ shell_style: posix # posix or fish
 - No secrets are logged or printed to stdout/stderr; GPG stderr is reduced to short actionable diagnostics before it is included in errors
 - `exec` unlinks its decrypted temp file before the child command continues and passes it through an inherited file descriptor (`/proc/self/fd/3` on Linux, `/dev/fd/3` elsewhere)
 - `use` intentionally leaves a runtime temp file available for the current shell; run `kubegonfig cleanup` to remove stale activation files
-- Runtime cleanup removes valid profile-name-shaped `*.yaml` activation files only from the kubegonfig runtime directory
+- Runtime cleanup removes valid profile-name-shaped `*.yaml` activation files and leftover `kubegonfig-edit-*` edit directories (from an `edit` killed by SIGKILL or a crash) only from the kubegonfig runtime directory
+- `edit` and `restore` leave no named plaintext behind when stopped by SIGINT, SIGTERM or SIGHUP; the `restore` archive buffer is unlinked at creation
+- `delete` removes the profile's activation file; `rename` removes any activation file already at the new name
+- GPG encryption never fetches recipient keys over the network (`--no-auto-key-locate`); a recipient needs a key in your keyring
 - The active profile state name syntax is validated before it is printed or used to update profile state
 - Kubeconfig validation requires `apiVersion: v1`, `kind: Config`, at least one cluster/context/user, unique cluster/context/user names, cluster servers, context cluster/user references that point at defined entries, and a valid `current-context` when set
 - Atomic writes use temp file write, file fsync, rename, and parent directory fsync

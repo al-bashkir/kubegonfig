@@ -7,6 +7,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"fmt"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -83,6 +84,7 @@ func TestRestore_SingleCollisionFails(t *testing.T) {
 }
 
 func TestRestore_ConfigActionRequiresFlagAndArchiveConfig(t *testing.T) {
+	installFakeGPGForBundle(t)
 	withCfg := buildEncryptedArchive(t, map[string][]byte{"alpha": []byte("a")}, []byte("gpg_recipients: [extra@example.com]\n"))
 	noCfg := buildEncryptedArchive(t, map[string][]byte{"alpha": []byte("a")}, nil)
 	tests := []struct {
@@ -115,6 +117,7 @@ func TestRestore_ConfigActionRequiresFlagAndArchiveConfig(t *testing.T) {
 }
 
 func TestRestore_MergeSkipsBlankAndDuplicateRecipients(t *testing.T) {
+	installFakeGPGForBundle(t)
 	archive := buildEncryptedArchive(t, map[string][]byte{"alpha": []byte("a")},
 		[]byte("gpg_recipients: ['', '  ', local@example.com, ' new@example.com ']\n"))
 	cfg := newConfigOnDisk(t, "local@example.com")
@@ -158,6 +161,7 @@ func TestRestore_RejectsOversizedConfig(t *testing.T) {
 }
 
 func TestRestore_AcceptsConfigOfExactlyMaxSize(t *testing.T) {
+	installFakeGPGForBundle(t)
 	head := "gpg_recipients: [a@example.com]\n#"
 	body := head + strings.Repeat("x", MaxProfileSize-len(head))
 	archive := buildEncryptedArchive(t, map[string][]byte{"alpha": []byte("a")}, []byte(body))
@@ -189,5 +193,128 @@ func TestRestore_AcceptsManifestOfExactly64KiB(t *testing.T) {
 	dst := newSeededManager(t, nil)
 	if _, err := Restore(dst, &config.Config{GPGRecipient: "t@example.com"}, RestoreOptions{In: &buf}); err != nil {
 		t.Fatalf("Restore() error: %v", err)
+	}
+}
+
+// dirSpy lists dir on the first Read, so it sees what exists on disk while
+// Restore buffers the archive.
+type dirSpy struct {
+	r      *bytes.Reader
+	dir    string
+	t      *testing.T
+	listed []string
+}
+
+func (s *dirSpy) Read(p []byte) (int, error) {
+	if s.listed == nil {
+		entries, err := os.ReadDir(s.dir)
+		if err != nil {
+			s.t.Fatalf("read runtime dir: %v", err)
+		}
+		s.listed = []string{}
+		for _, e := range entries {
+			s.listed = append(s.listed, e.Name())
+		}
+	}
+	return s.r.Read(p)
+}
+
+func TestRestore_BufferLeavesNoNamedFileInRuntimeDir(t *testing.T) {
+	runtime := t.TempDir()
+	t.Setenv("XDG_RUNTIME_DIR", runtime)
+	archive := buildEncryptedArchive(t, map[string][]byte{"alpha": []byte("a")}, nil)
+	dst := newSeededManager(t, nil)
+
+	spy := &dirSpy{r: bytes.NewReader(archive), dir: filepath.Join(runtime, "kubegonfig"), t: t}
+	if _, err := Restore(dst, &config.Config{GPGRecipient: "t@example.com"}, RestoreOptions{In: spy}); err != nil {
+		t.Fatalf("Restore() error = %v", err)
+	}
+	if len(spy.listed) != 0 {
+		t.Errorf("runtime dir held %v while buffering; a killed process would leave plaintext behind", spy.listed)
+	}
+}
+
+// installLoggingFakeGPG installs a gpg stub that logs its arguments, fails
+// --list-keys for any recipient containing "unknown@", and otherwise acts as cat.
+func installLoggingFakeGPG(t *testing.T) (logPath string) {
+	t.Helper()
+	dir := t.TempDir()
+	logPath = filepath.Join(dir, "gpg.log")
+	script := "#!/bin/sh\necho \"$@\" >> " + logPath + "\n" +
+		"case \"$*\" in *--list-keys*unknown@*) echo 'gpg: error reading key: No public key' >&2; exit 2;; esac\ncat\n"
+	for _, name := range []string{"gpg2", "gpg"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(script), 0700); err != nil {
+			t.Fatalf("write fake %s: %v", name, err)
+		}
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	return logPath
+}
+
+// buildPlaintextArchiveConfigFirst writes manifest, config.yaml, then the
+// plaintext profile, the order an attacker-built archive may use.
+func buildPlaintextArchiveConfigFirst(t *testing.T, name string, kubeconfig, configBody []byte) []byte {
+	t.Helper()
+	now := time.Now().UTC().Truncate(time.Second)
+	m := Manifest{SchemaVersion: SchemaVersion, CreatedAt: now, ProfileCount: 1, ConfigIncluded: true,
+		Profiles: []ManifestProfile{{Name: name, File: ProfilesDir + name + PlaintextExt}}}
+	mb, err := yaml.Marshal(&m)
+	if err != nil {
+		t.Fatalf("marshal manifest: %v", err)
+	}
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+	for _, e := range []struct {
+		name string
+		body []byte
+	}{{ManifestName, mb}, {ConfigName, configBody}, {ProfilesDir + name + PlaintextExt, kubeconfig}} {
+		if err := writeTarEntry(tw, e.name, e.body, now); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
+}
+
+func TestRestore_MergedRecipientsDoNotAffectSameRunEncryption(t *testing.T) {
+	logPath := installLoggingFakeGPG(t)
+	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
+	archive := buildPlaintextArchiveConfigFirst(t, "alpha", validKubeconfigForBundle(), []byte("gpg_recipients: [extra@example.com]\n"))
+	cfg := newConfigOnDisk(t)
+	mgr, _ := profile.NewManager(cfg)
+
+	if _, err := Restore(mgr, cfg, RestoreOptions{In: bytes.NewReader(archive), MergeConfig: true}); err != nil {
+		t.Fatalf("Restore() error = %v", err)
+	}
+	logged, _ := os.ReadFile(logPath)
+	for _, line := range strings.Split(string(logged), "\n") {
+		if strings.Contains(line, "--encrypt") && strings.Contains(line, "extra@example.com") {
+			t.Errorf("profile was encrypted to an archive-supplied recipient: %q", line)
+		}
+	}
+	if !reflect.DeepEqual(cfg.GPGRecipients, []string{"extra@example.com"}) {
+		t.Errorf("GPGRecipients = %v, want the merged recipient saved", cfg.GPGRecipients)
+	}
+}
+
+func TestRestore_MergeRejectsRecipientWithoutLocalKey(t *testing.T) {
+	installLoggingFakeGPG(t)
+	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
+	archive := buildEncryptedArchive(t, map[string][]byte{"alpha": []byte("a")},
+		[]byte("gpg_recipients: [unknown@example.com, good@example.com]\n"))
+	cfg := newConfigOnDisk(t)
+	mgr, _ := profile.NewManager(cfg)
+
+	plan, err := Restore(mgr, cfg, RestoreOptions{In: bytes.NewReader(archive), MergeConfig: true})
+	if err == nil || !strings.Contains(err.Error(), "unknown@example.com") {
+		t.Fatalf("Restore() error = %v, want error naming unknown@example.com", err)
+	}
+	if !reflect.DeepEqual(cfg.GPGRecipients, []string{"good@example.com"}) {
+		t.Errorf("GPGRecipients = %v, want only the recipient with a local key", cfg.GPGRecipients)
+	}
+	if !reflect.DeepEqual(plan.AddedRecipients, []string{"good@example.com"}) {
+		t.Errorf("AddedRecipients = %v, want [good@example.com]", plan.AddedRecipients)
 	}
 }

@@ -305,6 +305,11 @@ func (m *Manager) Delete(name string) error {
 		if err := storage.RemoveFileInDir(m.profilesPath(), profileFileName(name)); err != nil {
 			return fmt.Errorf("delete profile: %w", err)
 		}
+		// A leftover activation file would look fresh to a later profile
+		// created or renamed onto this name.
+		if err := tmpfile.Remove(name); err != nil {
+			return fmt.Errorf("remove activation file: %w", err)
+		}
 		return nil
 	})
 }
@@ -318,30 +323,39 @@ func (m *Manager) Rename(oldName, newName string) error {
 		return fmt.Errorf("new name: %w", err)
 	}
 
-	return m.WithLock(func() error {
-		if err := m.checkExists(oldName, true); err != nil {
-			return err
-		}
-		if err := m.checkExists(newName, false); err != nil {
-			return err
-		}
-		current, err := m.GetCurrent()
-		if err != nil {
-			return fmt.Errorf("read current profile: %w", err)
-		}
+	return m.WithLock(func() error { return m.renameLocked(oldName, newName) })
+}
 
-		// ponytail: no rollback. If updating current fails after the rename,
-		// current keeps the old name until the next `use`.
-		if err := storage.RenameFileInDir(m.profilesPath(), profileFileName(oldName), profileFileName(newName)); err != nil {
-			return fmt.Errorf("rename: %w", err)
+// renameLocked does the rename; the caller holds the lock and has validated
+// both names.
+func (m *Manager) renameLocked(oldName, newName string) error {
+	if err := m.checkExists(oldName, true); err != nil {
+		return err
+	}
+	if err := m.checkExists(newName, false); err != nil {
+		return err
+	}
+	current, err := m.GetCurrent()
+	if err != nil {
+		return fmt.Errorf("read current profile: %w", err)
+	}
+
+	// rename(2) keeps the ciphertext mtime, so an activation file already
+	// at newName would pass the freshness check; drop it first.
+	if err := tmpfile.Remove(newName); err != nil {
+		return fmt.Errorf("remove stale activation file: %w", err)
+	}
+	// ponytail: no rollback. If updating current fails after the rename,
+	// current keeps the old name until the next `use`.
+	if err := storage.RenameFileInDir(m.profilesPath(), profileFileName(oldName), profileFileName(newName)); err != nil {
+		return fmt.Errorf("rename: %w", err)
+	}
+	if current == oldName {
+		if err := m.setCurrent(newName); err != nil {
+			return fmt.Errorf("update current profile: %w", err)
 		}
-		if current == oldName {
-			if err := m.setCurrent(newName); err != nil {
-				return fmt.Errorf("update current profile: %w", err)
-			}
-		}
-		return nil
-	})
+	}
+	return nil
 }
 
 // checkExists errors unless the profile's presence matches want.

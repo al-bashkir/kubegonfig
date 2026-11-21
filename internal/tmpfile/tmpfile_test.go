@@ -383,3 +383,44 @@ func TestProbeCachedInvalidName(t *testing.T) {
 		t.Fatal("ProbeCached() error = nil, want validation error")
 	}
 }
+
+func TestCleanupStaleRemovesEditDirsOnly(t *testing.T) {
+	tmp := t.TempDir()
+	runtimeDir := filepath.Join(tmp, "kubegonfig")
+	t.Setenv("XDG_RUNTIME_DIR", tmp)
+	outside := filepath.Join(tmp, "outside")
+	for _, d := range []string{filepath.Join(runtimeDir, "kubegonfig-edit-1"), filepath.Join(runtimeDir, "other-dir"), outside} {
+		if err := os.MkdirAll(d, 0700); err != nil {
+			t.Fatalf("setup: %v", err)
+		}
+	}
+	for _, f := range []string{
+		filepath.Join(runtimeDir, "kubegonfig-edit-1", "kubeconfig.yaml"),
+		filepath.Join(runtimeDir, "other-dir", "keep.txt"),
+		filepath.Join(outside, "keep.txt"),
+	} {
+		if err := os.WriteFile(f, []byte("data"), 0600); err != nil {
+			t.Fatalf("setup: %v", err)
+		}
+	}
+	// A symlink with an edit-dir name must be skipped, not followed.
+	if err := os.Symlink(outside, filepath.Join(runtimeDir, "kubegonfig-edit-link")); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	count, err := CleanupStale()
+	if err != nil {
+		t.Fatalf("CleanupStale() error: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("CleanupStale() removed %d, want 1", count)
+	}
+	if _, err := os.Stat(filepath.Join(runtimeDir, "kubegonfig-edit-1")); !os.IsNotExist(err) {
+		t.Errorf("leftover edit dir still exists (stat err = %v)", err)
+	}
+	for _, keep := range []string{filepath.Join(runtimeDir, "other-dir", "keep.txt"), filepath.Join(outside, "keep.txt")} {
+		if _, err := os.Stat(keep); err != nil {
+			t.Errorf("%s must be preserved: %v", keep, err)
+		}
+	}
+}
