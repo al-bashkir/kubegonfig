@@ -133,7 +133,7 @@ and uses shell output so callers can opt in to environment changes.
   validation, and shell escaping.
 - Preserve existing tests unless the tested code is verified dead and removed.
 - Use local host-based validation when helpful, including builds, linters,
-  shell syntax checks, Graphify updates, fake-GPG unit tests, and isolated
+  shell syntax checks, fake-GPG unit tests, and isolated
   GPG-backed CLI smoke checks when available.
 
 ## Documentation expectations
@@ -174,13 +174,3 @@ file, WORKLOG, and final report.
 - `.agent/` is in `.gitignore` — never commit it.
 - Do not commit directly to `main`; use feature branches.
 - One commit per user request; never auto-push.
-
-## graphify
-
-This project has a graphify knowledge graph at graphify-out/.
-
-Rules:
-- Before answering architecture or codebase questions, read graphify-out/GRAPH_REPORT.md for god nodes and community structure
-- If graphify-out/wiki/index.md exists, navigate it instead of reading raw files
-- For cross-module "how does X relate to Y" questions, prefer `graphify query "<question>"`, `graphify path "<A>" "<B>"`, or `graphify explain "<concept>"` over grep — these traverse the graph's EXTRACTED + INFERRED edges instead of scanning files
-- After modifying code files in this session, run `graphify update .` to keep the graph current (AST-only, no API cost)
